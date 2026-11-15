@@ -4,14 +4,13 @@ import {
   Link,
   Route,
   Routes,
+  useSearchParams,
   useNavigate,
   useParams,
 } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowRight,
   Check,
-  Filter,
   Heart,
   Minus,
   Plus,
@@ -19,13 +18,16 @@ import {
   ShoppingBag,
   Star,
   Trash2,
-  X,
 } from 'lucide-react'
 import { products } from './data/products'
+import { shopTabs } from './data/shopCollections'
 import Footer from './components/Footer'
 import Header from './components/Header'
 import ProductCard from './components/ProductCard'
+import ImageWithFallback from './components/ImageWithFallback'
 import MobileBottomNav from './components/MobileBottomNav'
+import SupportBubble from './components/SupportBubble'
+import ShopPageContent from './components/shop/ShopPageContent'
 import BenefitsSection from './components/home/BenefitsSection'
 import BestSellersSection from './components/home/BestSellersSection'
 import CategorySection from './components/home/CategorySection'
@@ -33,9 +35,124 @@ import HeroSection from './components/home/HeroSection'
 import NewArrivalsSection from './components/home/NewArrivalsSection'
 import PromoBannerSection from './components/home/PromoBannerSection'
 import StorySection from './components/home/StorySection'
+import TestimonialsSection from './components/home/TestimonialsSection'
 import { formatPrice } from './utils/formatPrice'
 
 const PRODUCT_STORAGE_KEY = 'ananyaCatalog'
+
+const utilityClasses = {
+  'section-wrap': 'w-full px-4 py-10 sm:px-7 sm:py-16',
+  container: 'mx-auto w-full max-w-7xl px-4 sm:px-7',
+  'shop-layout': 'grid gap-7 lg:grid-cols-[260px_minmax(0,1fr)]',
+  'shop-sidebar': 'rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-5',
+  'shop-sidebar__header': 'mb-5 flex items-center justify-between',
+  'filter-group': 'mb-5 space-y-2',
+  'filter-label': 'block text-sm font-semibold text-[#493b32]',
+  'search-input': 'flex min-h-11 items-center gap-2 rounded-xl border border-[#ddd4bf] bg-[#fffdf7] px-3 text-[#71645b]',
+  'chip-list': 'flex flex-wrap gap-2',
+  chip: 'rounded-full border border-[#ddd4bf] px-3 py-1.5 text-xs text-[#71645b] transition hover:border-[#b88a3e]',
+  selected: 'border-[#b88a3e] bg-[#b88a3e] text-[#2c1e19]',
+  active: 'border-[#b88a3e] bg-[#b88a3e] text-[#2c1e19]',
+  slider: 'w-full accent-[#b88a3e]',
+  'price-range': 'flex justify-between text-xs text-[#817970]',
+  'shop-content': 'min-w-0',
+  'shop-toolbar': 'mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-[#e2d9c5] pb-4',
+  'shop-toolbar__topline': 'flex items-center gap-4 text-sm text-[#71645b]',
+  'filter-toggle': 'inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#ddd4bf] px-4 font-semibold text-[#2c1e19] lg:hidden',
+  'sort-select-wrap': 'flex items-center gap-2 text-sm text-[#71645b]',
+  'product-grid': 'flex flex-wrap justify-center gap-4 sm:justify-start',
+  'empty-state': 'w-full rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] px-5 py-14 text-center',
+  'large-empty': 'flex min-h-[60vh] flex-col items-center justify-center gap-3',
+  'product-page': 'mx-auto max-w-7xl',
+  breadcrumbs: 'mb-6 flex flex-wrap gap-2 text-sm text-[#817970]',
+  'product-detail-layout': 'grid gap-8 lg:grid-cols-2 lg:gap-12',
+  'product-gallery': 'min-w-0',
+  'product-gallery__main': 'overflow-hidden rounded-[28px] bg-[#eee7d7]',
+  zoomable: 'aspect-[0.8] h-full w-full object-cover',
+  'product-gallery__thumbs': 'mt-3 flex gap-3 overflow-x-auto',
+  thumb: 'h-20 w-16 shrink-0 overflow-hidden rounded-xl border-2 border-transparent object-cover',
+  'product-info': 'min-w-0 py-2',
+  'section-label': 'mb-2 inline-block text-xs font-bold uppercase tracking-[0.18em] text-[#81622f]',
+  'section-title': 'text-3xl font-semibold leading-tight tracking-tight text-[#2c1e19] sm:text-4xl',
+  serif: 'font-serif',
+  'product-title': 'text-3xl font-semibold leading-tight tracking-tight text-[#2c1e19] sm:text-4xl',
+  'rating-row': 'mt-3 flex items-center gap-2 text-sm text-[#71645b]',
+  stars: 'flex items-center gap-1 text-[#b88a3e]',
+  'price-row': 'mt-5 flex flex-wrap items-center gap-3',
+  'current-price': 'text-2xl font-bold text-[#2c1e19]',
+  'old-price': 'text-base text-[#817970] line-through',
+  'discount-tag': 'rounded-full bg-[#eaf7f1] px-3 py-1 text-xs font-semibold text-[#247b5c]',
+  'product-description': 'mt-5 text-base leading-7 text-[#71645b]',
+  'detail-box': 'mt-6 rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-5 text-sm leading-6 text-[#71645b]',
+  'variant-block': 'mt-6',
+  'variant-list': 'mt-3 flex flex-wrap gap-2',
+  'variant-pill': 'rounded-full border border-[#ddd4bf] px-4 py-2 text-sm text-[#71645b]',
+  'purchase-row': 'mt-6 flex flex-wrap items-center gap-3',
+  'quantity-picker': 'inline-flex min-h-12 items-center gap-4 rounded-xl border border-[#ddd4bf] bg-[#fffdf7] px-3',
+  small: 'min-h-9 gap-3 px-2',
+  'primary-btn': 'inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#2c1e19] px-5 font-semibold text-white transition hover:bg-[#49352c]',
+  'secondary-btn': 'inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[#2c1e19] px-5 font-semibold text-[#2c1e19] transition hover:bg-[#eee7d7]',
+  'full-width': 'w-full',
+  'justify-center': 'justify-center',
+  'action-row': 'mt-4 flex flex-wrap items-center justify-between gap-3',
+  'mini-action': 'inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#ddd4bf] px-4 text-sm font-semibold',
+  'stock-status': 'text-sm font-medium text-[#247b5c]',
+  'pincode-checker': 'mt-6 rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-5',
+  'pincode-input-row': 'mt-2 flex gap-2',
+  'product-tabs': 'mt-10 flex border-b border-[#ddd4bf]',
+  'product-tabs__content': 'py-6',
+  'spec-grid': 'grid gap-3 sm:grid-cols-2',
+  'review-panel': 'grid gap-4 md:grid-cols-2',
+  'review-card': 'rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-5',
+  'review-stars': 'mb-3 flex gap-1 text-[#b88a3e]',
+  'related-section': 'mt-12',
+  'section-header': 'mb-6 flex items-end justify-between gap-4',
+  'cart-layout': 'grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,0.8fr)]',
+  'cart-items-panel': 'rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-5 sm:p-7',
+  'compact-header': 'mb-5',
+  'cart-item': 'flex gap-4 border-t border-[#e2d9c5] py-4',
+  'cart-item__details': 'flex min-w-0 flex-1 flex-col justify-between gap-3',
+  'cart-item__meta': 'flex flex-wrap items-center justify-between gap-3 text-sm text-[#71645b]',
+  'remove-btn': 'inline-flex h-9 w-9 items-center justify-center rounded-full text-[#817970] hover:bg-[#f3e7e5] hover:text-[#a23b36]',
+  'summary-panel': 'rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-5 sm:p-7',
+  'summary-line': 'flex items-center justify-between gap-3 border-b border-[#eee7d7] py-3 text-sm text-[#71645b]',
+  'coupon-box': 'my-4 flex gap-2',
+  'summary-total': 'my-4 flex items-center justify-between text-lg font-bold',
+  'checkout-layout': 'grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.8fr)]',
+  'checkout-form': 'space-y-5',
+  'checkout-step': 'rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-5 sm:p-7',
+  'field-grid': 'grid gap-4 sm:grid-cols-2',
+  'two-columns': 'sm:grid-cols-2',
+  field: 'flex min-w-0 flex-col gap-2',
+  'form-control': 'w-full rounded-xl border border-[#ddd4bf] bg-[#fffdf7] px-3 py-2.5 text-sm text-[#2c1e19] outline-none transition placeholder:text-[#a29a8e] focus:border-[#b88a3e] focus:ring-2 focus:ring-[#b88a3e]/15',
+  'full-span': 'sm:col-span-2',
+  'radio-list': 'mt-3 grid gap-3 sm:grid-cols-2',
+  'radio-option': 'flex items-center gap-3 rounded-xl border border-[#ddd4bf] p-4 text-sm',
+  'checkout-summary': 'h-fit lg:sticky lg:top-28',
+  'summary-items': 'space-y-3 border-b border-[#e2d9c5] pb-4',
+  'summary-item': 'flex items-center justify-between gap-3 text-sm',
+  'account-layout': 'grid gap-6 lg:grid-cols-2',
+  'account-card': 'rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-5 sm:p-8',
+  'tab-switcher': 'mb-6 flex border-b border-[#e2d9c5]',
+  'account-form': 'space-y-4',
+  'account-info': 'bg-[#efe7d5]',
+  'admin-layout': 'space-y-6',
+  'admin-header': 'flex flex-wrap items-center justify-between gap-4',
+  'admin-metrics': 'grid grid-cols-2 gap-3 lg:grid-cols-4',
+  'metric-card': 'rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-4',
+  'admin-panels': 'grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)]',
+  'admin-card': 'rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-5',
+  'admin-product-list': 'mt-4 space-y-3',
+  'admin-product-item': 'rounded-xl border border-[#e2d9c5] p-4',
+  'admin-product-top': 'flex items-start justify-between gap-3',
+  'admin-product-meta': 'mt-2 flex flex-wrap gap-3 text-xs text-[#817970]',
+  'admin-product-actions': 'mt-3 flex items-center gap-2',
+  'icon-button': 'inline-flex h-10 w-10 items-center justify-center rounded-full text-[#493b32] hover:bg-[#eee7d7]',
+}
+
+function tw(classNames) {
+  return classNames.split(/\s+/).map((name) => utilityClasses[name] || name).join(' ')
+}
 
 const getStoredProducts = () => {
   if (typeof window === 'undefined') return products
@@ -155,7 +272,7 @@ function App() {
 
   return (
     <BrowserRouter>
-      <div className="luxury-shell">
+      <div className={tw('min-h-screen bg-[#f8f5e9] pb-20 text-[#2c1e19] md:pb-0')}>
         <Header cartCount={cartCount} wishlist={wishlist} />
         <main>
           <Routes>
@@ -206,6 +323,17 @@ function App() {
               }
             />
             <Route
+              path="/wishlist"
+              element={
+                <WishlistPage
+                  products={catalog.filter((product) => wishlist.includes(product.id))}
+                  addToCart={addToCart}
+                  toggleWishlist={toggleWishlist}
+                  wishlist={wishlist}
+                />
+              }
+            />
+            <Route
               path="/checkout"
               element={<CheckoutPage cart={cart} total={total} shipping={shipping} />}
             />
@@ -225,6 +353,7 @@ function App() {
           </Routes>
         </main>
         <Footer />
+        <SupportBubble />
         <MobileBottomNav cartCount={cartCount} wishlistCount={wishlist.length} />
       </div>
     </BrowserRouter>
@@ -232,7 +361,6 @@ function App() {
 }
 
 function HomePage({ addToCart, toggleWishlist, wishlist, products }) {
-  const [quickView, setQuickView] = useState(null)
   const featuredProducts = products.slice(0, 4)
   const bestSellers = products.slice(2, 6)
 
@@ -240,270 +368,122 @@ function HomePage({ addToCart, toggleWishlist, wishlist, products }) {
     <>
       <HeroSection />
       <CategorySection />
-      <NewArrivalsSection
-        featuredProducts={featuredProducts}
-        addToCart={addToCart}
-        toggleWishlist={toggleWishlist}
-        wishlist={wishlist}
-        setQuickView={setQuickView}
-      />
-      <PromoBannerSection />
       <BestSellersSection
         bestSellers={bestSellers}
         addToCart={addToCart}
         toggleWishlist={toggleWishlist}
         wishlist={wishlist}
-        setQuickView={setQuickView}
       />
-      <StorySection />
+      <NewArrivalsSection
+        featuredProducts={featuredProducts}
+        addToCart={addToCart}
+        toggleWishlist={toggleWishlist}
+        wishlist={wishlist}
+      />
       <BenefitsSection />
-
-      <AnimatePresence>
-        {quickView && (
-          <QuickViewModal
-            product={quickView}
-            addToCart={addToCart}
-            onClose={() => setQuickView(null)}
-          />
-        )}
-      </AnimatePresence>
+      <StorySection />
+      <PromoBannerSection />
+      <TestimonialsSection />
     </>
   )
 }
 
-function ShopPage({ addToCart, toggleWishlist, wishlist, products }) {
-  const [search, setSearch] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('All')
-  const [selectedFabric, setSelectedFabric] = useState('All')
-  const [selectedColor, setSelectedColor] = useState('All')
-  const [selectedOccasion, setSelectedOccasion] = useState('All')
-  const [maxPrice, setMaxPrice] = useState(7000)
-  const [sortBy, setSortBy] = useState('featured')
-  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
-
-  const filteredProducts = useMemo(() => {
-    const query = search.toLowerCase().trim()
-
-    return [...products]
-      .filter((product) => {
-        const matchesSearch =
-          !query ||
-          product.name.toLowerCase().includes(query) ||
-          product.category.toLowerCase().includes(query) ||
-          product.fabric.toLowerCase().includes(query)
-
-        const matchesCategory =
-          selectedCategory === 'All' || product.category === selectedCategory
-        const matchesFabric = selectedFabric === 'All' || product.fabric === selectedFabric
-        const matchesColor =
-          selectedColor === 'All' || product.colors.includes(selectedColor)
-        const matchesOccasion =
-          selectedOccasion === 'All' || product.occasion === selectedOccasion
-        const matchesPrice = product.discountedPrice <= maxPrice
-
-        return (
-          matchesSearch &&
-          matchesCategory &&
-          matchesFabric &&
-          matchesColor &&
-          matchesOccasion &&
-          matchesPrice
-        )
-      })
-      .sort((a, b) => {
-        switch (sortBy) {
-          case 'price-low':
-            return a.discountedPrice - b.discountedPrice
-          case 'price-high':
-            return b.discountedPrice - a.discountedPrice
-          case 'popular':
-            return b.rating - a.rating
-          case 'newest':
-            return b.discount - a.discount
-          default:
-            return b.rating * 10 - a.rating * 10
-        }
-      })
-  }, [search, selectedCategory, selectedFabric, selectedColor, selectedOccasion, maxPrice, sortBy])
-
-  const categoryOptions = ['All', ...new Set(products.map((product) => product.category))]
-  const fabricOptions = ['All', ...new Set(products.map((product) => product.fabric))]
-  const colorOptions = ['All', ...new Set(products.flatMap((product) => product.colors))]
-  const occasionOptions = ['All', ...new Set(products.map((product) => product.occasion))]
-
+function WishlistPage({ products, addToCart, toggleWishlist, wishlist }) {
   return (
-    <section className="section-wrap">
-      <div className="container shop-layout">
-        <aside className={`shop-sidebar ${mobileFiltersOpen ? 'open' : ''}`}>
-          <div className="shop-sidebar__header">
-            <span className="section-label">Filters</span>
-            <button type="button" className="icon-button" onClick={() => setMobileFiltersOpen(false)}>
-              <X size={16} />
-            </button>
-          </div>
-
-          <div className="filter-group">
-            <label className="filter-label">Search</label>
-            <div className="search-input">
-              <Search size={16} />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search sarees" />
-            </div>
-          </div>
-
-          <div className="filter-group">
-            <label className="filter-label">Category</label>
-            <div className="chip-list">
-              {categoryOptions.map((category) => (
-                <button
-                  type="button"
-                  key={category}
-                  className={`chip ${selectedCategory === category ? 'selected' : ''}`}
-                  onClick={() => setSelectedCategory(category)}
-                >
-                  {category}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="filter-group">
-            <label className="filter-label">Fabric</label>
-            <div className="chip-list">
-              {fabricOptions.map((fabric) => (
-                <button
-                  type="button"
-                  key={fabric}
-                  className={`chip ${selectedFabric === fabric ? 'selected' : ''}`}
-                  onClick={() => setSelectedFabric(fabric)}
-                >
-                  {fabric}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="filter-group">
-            <label className="filter-label">Price Range</label>
-            <input
-              type="range"
-              min="1500"
-              max="7000"
-              step="100"
-              value={maxPrice}
-              onChange={(event) => setMaxPrice(Number(event.target.value))}
-              className="slider"
-            />
-            <div className="price-range">
-              <span>₹1500</span>
-              <span>₹{maxPrice}</span>
-            </div>
-          </div>
-
-          <div className="filter-group">
-            <label className="filter-label">Color</label>
-            <div className="chip-list">
-              {colorOptions.map((color) => (
-                <button
-                  type="button"
-                  key={color}
-                  className={`chip ${selectedColor === color ? 'selected' : ''}`}
-                  onClick={() => setSelectedColor(color)}
-                >
-                  {color}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="filter-group">
-            <label className="filter-label">Occasion</label>
-            <div className="chip-list">
-              {occasionOptions.map((occasion) => (
-                <button
-                  type="button"
-                  key={occasion}
-                  className={`chip ${selectedOccasion === occasion ? 'selected' : ''}`}
-                  onClick={() => setSelectedOccasion(occasion)}
-                >
-                  {occasion}
-                </button>
-              ))}
-            </div>
-          </div>
-        </aside>
-
-        <div className="shop-content">
-          <div className="shop-toolbar">
-            <div className="shop-toolbar__topline">
-              <button type="button" className="filter-toggle" onClick={() => setMobileFiltersOpen(true)}>
-                <Filter size={16} />
-                Filters
-              </button>
-              <span>{filteredProducts.length} products</span>
-            </div>
-
-            <div className="sort-select-wrap">
-              <label htmlFor="sortBy">Sort by</label>
-              <select id="sortBy" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-                <option value="featured">Featured</option>
-                <option value="popular">Popularity</option>
-                <option value="newest">Newest</option>
-                <option value="price-low">Price: Low to High</option>
-                <option value="price-high">Price: High to Low</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="product-grid">
-            {filteredProducts.length > 0 ? (
-              filteredProducts.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  addToCart={addToCart}
-                  toggleWishlist={toggleWishlist}
-                  isWishlisted={wishlist.includes(product.id)}
-                />
-              ))
-            ) : (
-              <div className="empty-state">
-                <h3>No sarees match your filters.</h3>
-                <button type="button" className="secondary-btn" onClick={() => { setSearch(''); setSelectedCategory('All'); setSelectedFabric('All'); setSelectedColor('All'); setSelectedOccasion('All'); setMaxPrice(7000); }}>
-                  Reset Filters
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+    <section className={tw('mx-auto min-h-[70vh] max-w-7xl px-4 py-10 sm:px-7 sm:py-16')}>
+      <div className={tw('mb-8')}>
+        <span className={tw('text-xs font-bold uppercase tracking-[0.18em] text-[#81622f]')}>Your saved pieces</span>
+        <h1 className={tw('mt-2 text-4xl font-semibold tracking-tight text-[#2c1e19] sm:text-5xl')}>Wishlist</h1>
       </div>
+      {products.length ? (
+        <div className={tw('flex snap-x snap-mandatory gap-4 overflow-x-auto pb-3 [scrollbar-width:none] sm:flex-wrap')}>
+          {products.map((product) => (
+            <ProductCard key={product.id} product={product} addToCart={addToCart} toggleWishlist={toggleWishlist} isWishlisted={wishlist.includes(product.id)} />
+          ))}
+        </div>
+      ) : (
+        <div className={tw('rounded-[28px] border border-[#ddd4bf] bg-[#fffdf7] px-6 py-14 text-center sm:py-20')}>
+          <Heart className={tw('mx-auto text-[#b98791]')} size={40} strokeWidth={1.6} />
+          <h2 className={tw('mt-4 text-2xl font-semibold text-[#2c1e19]')}>Your wishlist is waiting</h2>
+          <p className={tw('mt-2 text-[#71645b]')}>Save the sarees you love and find them here later.</p>
+          <Link to="/shop" className={tw('mt-6 inline-flex min-h-12 items-center justify-center rounded-2xl bg-[#2c1e19] px-6 font-semibold text-white')}>Explore sarees</Link>
+        </div>
+      )}
     </section>
   )
 }
 
+function ShopPage({ addToCart, toggleWishlist, wishlist, products }) {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const search = searchParams.get('search') || ''
+  const selectedCategory = searchParams.get('category') || 'All'
+  const maxPrice = Number(searchParams.get('maxPrice')) || 7000
+  const [sortBy, setSortBy] = useState(() => {
+    const sort = searchParams.get('sort')
+    return sort === 'new' ? 'newest' : sort === 'popular' ? 'popular' : 'featured'
+  })
+
+  const setSelectedCategory = (category) => {
+    const nextParams = new URLSearchParams(searchParams)
+    if (category === 'All') nextParams.delete('category')
+    else nextParams.set('category', category)
+    setSearchParams(nextParams, { replace: true })
+  }
+
+  const filteredProducts = useMemo(() => {
+    const query = search.toLowerCase().trim()
+    const tab = shopTabs.find((item) => item.category === selectedCategory)
+    const productCategory = tab?.productCategory || selectedCategory
+
+    return [...products]
+      .filter((product) => {
+        const matchesSearch = !query ||
+          product.name.toLowerCase().includes(query) ||
+          product.category.toLowerCase().includes(query) ||
+          product.fabric.toLowerCase().includes(query)
+        const matchesCategory = productCategory === 'All' || productCategory === 'Sale' || product.category === productCategory
+        const matchesSale = productCategory !== 'Sale' || product.discount > 0
+        const matchesPrice = product.discountedPrice <= maxPrice
+        return matchesSearch && matchesCategory && matchesSale && matchesPrice
+      })
+      .sort((a, b) => {
+        if (sortBy === 'price-low') return a.discountedPrice - b.discountedPrice
+        if (sortBy === 'price-high') return b.discountedPrice - a.discountedPrice
+        if (sortBy === 'newest') return b.discount - a.discount
+        return b.rating - a.rating
+      })
+  }, [products, search, selectedCategory, maxPrice, sortBy])
+
+  return (
+    <ShopPageContent
+      filteredProducts={filteredProducts}
+      addToCart={addToCart}
+      toggleWishlist={toggleWishlist}
+      wishlist={wishlist}
+      selectedCategory={selectedCategory}
+      setSelectedCategory={setSelectedCategory}
+      sortBy={sortBy}
+      setSortBy={setSortBy}
+    />
+  )
+}
 function ProductPage({ addToCart, toggleWishlist, wishlist, products }) {
   const { id } = useParams()
-  const navigate = useNavigate()
   const product = products.find((item) => item.id === id)
-  const [selectedImage, setSelectedImage] = useState(product?.images?.[0] || '')
-  const [selectedVariant, setSelectedVariant] = useState(product?.colors?.[0] || 'Classic')
+
+  if (!product) return <NotFound />
+
+  return <ProductDetail key={product.id} product={product} toggleWishlist={toggleWishlist} wishlist={wishlist} addToCart={addToCart} products={products} />
+}
+
+function ProductDetail({ addToCart, toggleWishlist, wishlist, products, product }) {
+  const navigate = useNavigate()
+  const [selectedImage, setSelectedImage] = useState(product.images[0])
+  const [selectedVariant, setSelectedVariant] = useState(product.colors[0] || 'Classic')
   const [quantity, setQuantity] = useState(1)
   const [pincode, setPincode] = useState('')
   const [deliveryStatus, setDeliveryStatus] = useState('')
-  const [recentlyViewed, setRecentlyViewed] = useState([])
-
-  useEffect(() => {
-    if (!product) return
-    setSelectedImage(product.images[0])
-    setSelectedVariant(product.colors[0])
-    setQuantity(1)
-    setRecentlyViewed((current) => [product.id, ...current.filter((entry) => entry !== product.id)].slice(0, 4))
-  }, [product])
-
-  if (!product) {
-    return <NotFound />
-  }
-
-  const recentProducts = products.filter((item) => recentlyViewed.includes(item.id))
+  const recentProducts = products.filter((item) => item.id !== product.id).slice(0, 4)
 
   const handlePincodeCheck = () => {
     if (pincode.trim().length !== 6) {
@@ -519,9 +499,9 @@ function ProductPage({ addToCart, toggleWishlist, wishlist, products }) {
   }
 
   return (
-    <section className="section-wrap product-page">
-      <div className="container">
-        <div className="breadcrumbs">
+    <section className={tw('section-wrap product-page')}>
+      <div className={tw('container')}>
+        <div className={tw('breadcrumbs')}>
           <Link to="/">Home</Link>
           <span>/</span>
           <Link to="/shop">Shop</Link>
@@ -529,30 +509,30 @@ function ProductPage({ addToCart, toggleWishlist, wishlist, products }) {
           <span>{product.name}</span>
         </div>
 
-        <div className="product-detail-layout">
-          <div className="product-gallery">
-            <div className="product-gallery__main">
-              <img src={selectedImage} alt={product.name} className="zoomable" />
+        <div className={tw('product-detail-layout')}>
+          <div className={tw('product-gallery')}>
+            <div className={tw('product-gallery__main')}>
+              <ImageWithFallback src={selectedImage} alt={product.name} className={tw('zoomable')} />
             </div>
-            <div className="product-gallery__thumbs">
+            <div className={tw('product-gallery__thumbs')}>
               {product.images.map((image) => (
                 <button
                   key={image}
                   type="button"
-                  className={`thumb ${selectedImage === image ? 'selected' : ''}`}
+                  className={tw(`thumb ${selectedImage === image ? 'selected' : ''}`)}
                   onClick={() => setSelectedImage(image)}
                 >
-                  <img src={image} alt={product.name} />
+                  <ImageWithFallback src={image} alt={product.name} className="h-full w-full rounded-xl object-cover" />
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="product-info">
-            <span className="section-label">{product.category}</span>
-            <h1 className="serif product-title">{product.name}</h1>
-            <div className="rating-row">
-              <div className="stars">
+          <div className={tw('product-info')}>
+            <span className={tw('section-label')}>{product.category}</span>
+            <h1 className={tw('serif product-title')}>{product.name}</h1>
+            <div className={tw('rating-row')}>
+              <div className={tw('stars')}>
                 {[...Array(5)].map((_, index) => (
                   <Star key={index} size={14} fill={index < Math.round(product.rating) ? '#d6ae55' : '#dfe2e8'} strokeWidth={1.5} />
                 ))}
@@ -560,15 +540,15 @@ function ProductPage({ addToCart, toggleWishlist, wishlist, products }) {
               <span>{product.rating} ({product.reviews} reviews)</span>
             </div>
 
-            <div className="price-row">
-              <span className="current-price">{formatPrice(product.discountedPrice)}</span>
-              <span className="old-price">{formatPrice(product.price)}</span>
-              <span className="discount-tag">{product.discount}% Off</span>
+            <div className={tw('price-row')}>
+              <span className={tw('current-price')}>{formatPrice(product.discountedPrice)}</span>
+              <span className={tw('old-price')}>{formatPrice(product.price)}</span>
+              <span className={tw('discount-tag')}>{product.discount}% Off</span>
             </div>
 
-            <p className="product-description">{product.description}</p>
+            <p className={tw('product-description')}>{product.description}</p>
 
-            <div className="detail-box">
+            <div className={tw('detail-box')}>
               <div>
                 <span>Fabric</span>
                 <strong>{product.material}</strong>
@@ -583,14 +563,14 @@ function ProductPage({ addToCart, toggleWishlist, wishlist, products }) {
               </div>
             </div>
 
-            <div className="variant-block">
+            <div className={tw('variant-block')}>
               <span>Available Colors</span>
-              <div className="variant-list">
+              <div className={tw('variant-list')}>
                 {product.colors.map((color) => (
                   <button
                     key={color}
                     type="button"
-                    className={`variant-pill ${selectedVariant === color ? 'selected' : ''}`}
+                    className={tw(`variant-pill ${selectedVariant === color ? 'selected' : ''}`)}
                     onClick={() => setSelectedVariant(color)}
                   >
                     {color}
@@ -599,8 +579,8 @@ function ProductPage({ addToCart, toggleWishlist, wishlist, products }) {
               </div>
             </div>
 
-            <div className="purchase-row">
-              <div className="quantity-picker">
+            <div className={tw('purchase-row')}>
+              <div className={tw('quantity-picker')}>
                 <button type="button" onClick={() => setQuantity((current) => Math.max(1, current - 1))}>
                   <Minus size={16} />
                 </button>
@@ -609,27 +589,27 @@ function ProductPage({ addToCart, toggleWishlist, wishlist, products }) {
                   <Plus size={16} />
                 </button>
               </div>
-              <button type="button" className="primary-btn full-width" onClick={() => addToCart(product, quantity, selectedVariant)}>
+              <button type="button" className={tw('primary-btn full-width')} onClick={() => addToCart(product, quantity, selectedVariant)}>
                 Add to Cart
               </button>
-              <button type="button" className="secondary-btn" onClick={() => { addToCart(product, quantity, selectedVariant); navigate('/checkout'); }}>
+              <button type="button" className={tw('secondary-btn')} onClick={() => { addToCart(product, quantity, selectedVariant); navigate('/checkout'); }}>
                 Buy Now
               </button>
             </div>
 
-            <div className="action-row">
-              <button type="button" className="mini-action" onClick={() => toggleWishlist(product.id)}>
+            <div className={tw('action-row')}>
+              <button type="button" className={tw('mini-action')} onClick={() => toggleWishlist(product.id)}>
                 <Heart size={16} fill={wishlist.includes(product.id) ? '#651F32' : 'none'} />
                 {wishlist.includes(product.id) ? 'Saved' : 'Wishlist'}
               </button>
-              <span className="stock-status">{product.stock > 0 ? `In stock: ${product.stock} left` : 'Out of stock'}</span>
+              <span className={tw('stock-status')}>{product.stock > 0 ? `In stock: ${product.stock} left` : 'Out of stock'}</span>
             </div>
 
-            <div className="pincode-checker">
+            <div className={tw('pincode-checker')}>
               <label>Check delivery availability</label>
-              <div className="pincode-input-row">
-                <input value={pincode} onChange={(event) => setPincode(event.target.value)} placeholder="Enter PIN code" />
-                <button type="button" className="secondary-btn" onClick={handlePincodeCheck}>
+              <div className={tw('pincode-input-row')}>
+                <input className={tw('form-control')} value={pincode} onChange={(event) => setPincode(event.target.value)} placeholder="Enter PIN code" />
+                <button type="button" className={tw('secondary-btn')} onClick={handlePincodeCheck}>
                   Check
                 </button>
               </div>
@@ -638,14 +618,14 @@ function ProductPage({ addToCart, toggleWishlist, wishlist, products }) {
           </div>
         </div>
 
-        <div className="product-tabs">
-          <button type="button" className={product.activeTab === 'description' ? 'active' : ''}>Description</button>
+        <div className={tw('product-tabs')}>
+          <button type="button" className={tw(`rounded-t-xl px-4 py-3 text-sm font-semibold ${product.activeTab === 'description' ? 'active' : 'text-[#817970]'}`)}>Description</button>
           <button type="button">Specifications</button>
           <button type="button">Reviews</button>
         </div>
 
-        <div className="product-tabs__content">
-          <div className="spec-grid">
+        <div className={tw('product-tabs__content')}>
+          <div className={tw('spec-grid')}>
             <div>
               <span>Fabric Details</span>
               <strong>{product.material}</strong>
@@ -664,37 +644,37 @@ function ProductPage({ addToCart, toggleWishlist, wishlist, products }) {
             </div>
           </div>
 
-          <div className="review-panel">
-            <div className="review-card">
-              <div className="review-stars">
+          <div className={tw('review-panel')}>
+            <div className={tw('review-card')}>
+              <div className={tw('review-stars')}>
                 {[...Array(5)].map((_, index) => (
                   <Star key={index} size={14} fill="#d6ae55" strokeWidth={1.5} />
                 ))}
               </div>
-              <p>“The drape and finish are stunning. It felt premium from the moment I unboxed it.”</p>
-              <strong>— Ankita S.</strong>
+              <p>â€œThe drape and finish are stunning. It felt premium from the moment I unboxed it.â€</p>
+              <strong>â€” Ankita S.</strong>
             </div>
-            <div className="review-card">
-              <div className="review-stars">
+            <div className={tw('review-card')}>
+              <div className={tw('review-stars')}>
                 {[...Array(5)].map((_, index) => (
                   <Star key={index} size={14} fill="#d6ae55" strokeWidth={1.5} />
                 ))}
               </div>
-              <p>“Beautiful zari work and an elegant silhouette. It is perfect for festive occasions.”</p>
-              <strong>— Neha R.</strong>
+              <p>â€œBeautiful zari work and an elegant silhouette. It is perfect for festive occasions.â€</p>
+              <strong>â€” Neha R.</strong>
             </div>
           </div>
         </div>
 
         {recentProducts.length > 0 && (
-          <div className="related-section">
-            <div className="section-header">
+          <div className={tw('related-section')}>
+            <div className={tw('section-header')}>
               <div>
-                <span className="section-label">Recently Viewed</span>
-                <h2 className="section-title">You may also like</h2>
+          <span className={tw('section-label')}>You may also like</span>
+                <h2 className={tw('section-title')}>You may also like</h2>
               </div>
             </div>
-            <div className="product-grid">
+            <div className={tw('product-grid')}>
               {recentProducts.map((item) => (
                 <ProductCard
                   key={item.id}
@@ -722,12 +702,12 @@ function CartPage({ cart, subtotal, shipping, discount, updateQuantity, removeFr
 
   if (!cart.length) {
     return (
-      <section className="section-wrap">
-        <div className="container empty-state large-empty">
+      <section className={tw('section-wrap')}>
+        <div className={tw('container empty-state large-empty')}>
           <ShoppingBag size={42} />
           <h2>Your cart is empty</h2>
           <p>Explore our latest saree drops and add your favourites to the cart.</p>
-          <Link to="/shop" className="primary-btn">
+          <Link to="/shop" className={tw('primary-btn')}>
             Continue Shopping
             <ArrowRight size={18} />
           </Link>
@@ -737,28 +717,28 @@ function CartPage({ cart, subtotal, shipping, discount, updateQuantity, removeFr
   }
 
   return (
-    <section className="section-wrap">
-      <div className="container cart-layout">
-        <div className="cart-items-panel">
-          <div className="section-header compact-header">
+    <section className={tw('section-wrap')}>
+      <div className={tw('container cart-layout')}>
+        <div className={tw('cart-items-panel')}>
+          <div className={tw('section-header compact-header')}>
             <div>
-              <span className="section-label">Your Bag</span>
-              <h2 className="section-title">Shopping Cart</h2>
+              <span className={tw('section-label')}>Your Bag</span>
+              <h2 className={tw('section-title')}>Shopping Cart</h2>
             </div>
-            <Link to="/shop" className="secondary-btn">
+            <Link to="/shop" className={tw('secondary-btn')}>
               Continue Shopping
             </Link>
           </div>
 
           {cart.map((item) => (
-            <div className="cart-item" key={`${item.id}-${item.variant}`}>
-              <img src={item.image} alt={item.name} />
-              <div className="cart-item__details">
+            <div className={tw('cart-item')} key={`${item.id}-${item.variant}`}>
+              <ImageWithFallback src={item.image} alt={item.name} className="h-24 w-20 shrink-0 rounded-xl object-cover" />
+              <div className={tw('cart-item__details')}>
                 <h3>{item.name}</h3>
                 <p>{item.variant}</p>
-                <div className="cart-item__meta">
+                <div className={tw('cart-item__meta')}>
                   <strong>{formatPrice(item.price)}</strong>
-                  <div className="quantity-picker small">
+                  <div className={tw('quantity-picker small')}>
                     <button type="button" onClick={() => updateQuantity(item.id, item.variant, -1)}>
                       <Minus size={14} />
                     </button>
@@ -769,41 +749,41 @@ function CartPage({ cart, subtotal, shipping, discount, updateQuantity, removeFr
                   </div>
                 </div>
               </div>
-              <button type="button" className="remove-btn" onClick={() => removeFromCart(item.id, item.variant)}>
+              <button type="button" className={tw('remove-btn')} onClick={() => removeFromCart(item.id, item.variant)}>
                 <Trash2 size={15} />
               </button>
             </div>
           ))}
         </div>
 
-        <div className="summary-panel">
+        <div className={tw('summary-panel')}>
           <h3>Order Summary</h3>
-          <div className="summary-line">
+          <div className={tw('summary-line')}>
             <span>Subtotal</span>
             <strong>{formatPrice(subtotal)}</strong>
           </div>
-          <div className="summary-line">
+          <div className={tw('summary-line')}>
             <span>Discount</span>
             <strong>-{formatPrice(discountValue)}</strong>
           </div>
-          <div className="summary-line">
+          <div className={tw('summary-line')}>
             <span>Shipping</span>
             <strong>{shipping === 0 ? 'Free' : formatPrice(shipping)}</strong>
           </div>
 
-          <div className="coupon-box">
-            <input value={couponCode} onChange={(event) => setCouponCode(event.target.value)} placeholder="Coupon code" />
-            <button type="button" className="secondary-btn" onClick={() => setAppliedCoupon(couponCode.trim() || '')}>
+          <div className={tw('coupon-box')}>
+            <input className={tw('form-control')} value={couponCode} onChange={(event) => setCouponCode(event.target.value)} placeholder="Coupon code" />
+            <button type="button" className={tw('secondary-btn')} onClick={() => setAppliedCoupon(couponCode.trim() || '')}>
               Apply
             </button>
           </div>
 
-          <div className="summary-total">
+          <div className={tw('summary-total')}>
             <span>Total</span>
             <strong>{formatPrice(totalWithCoupon)}</strong>
           </div>
 
-          <Link to="/checkout" className="primary-btn full-width justify-center">
+          <Link to="/checkout" className={tw('primary-btn full-width justify-center')}>
             Proceed to Checkout
           </Link>
         </div>
@@ -866,12 +846,12 @@ function CheckoutPage({ cart, total, shipping }) {
 
   if (submitted) {
     return (
-      <section className="section-wrap">
-        <div className="container empty-state large-empty">
+      <section className={tw('section-wrap')}>
+        <div className={tw('container empty-state large-empty')}>
           <Check size={42} />
           <h2>Order placed successfully</h2>
           <p>Your booking is confirmed and a confirmation message has been sent to your email.</p>
-          <Link to="/shop" className="primary-btn">
+          <Link to="/shop" className={tw('primary-btn')}>
             Continue Shopping
             <ArrowRight size={18} />
           </Link>
@@ -881,69 +861,69 @@ function CheckoutPage({ cart, total, shipping }) {
   }
 
   return (
-    <section className="section-wrap">
-      <div className="container checkout-layout">
-        <form className="checkout-form" onSubmit={handleSubmit} noValidate>
-          <div className="checkout-step">
-            <span className="section-label">Step 1</span>
+    <section className={tw('section-wrap')}>
+      <div className={tw('container checkout-layout')}>
+        <form className={tw('checkout-form')} onSubmit={handleSubmit} noValidate>
+          <div className={tw('checkout-step')}>
+            <span className={tw('section-label')}>Step 1</span>
             <h3>Customer Information</h3>
-            <div className="field-grid two-columns">
-              <div className="field">
+            <div className={tw('field-grid two-columns')}>
+              <div className={tw('field')}>
                 <label>Full Name</label>
-                <input name="fullName" value={formData.fullName} onChange={handleChange} />
+                <input className={tw('form-control')} name="fullName" value={formData.fullName} onChange={handleChange} />
                 {errors.fullName && <small>{errors.fullName}</small>}
               </div>
-              <div className="field">
+              <div className={tw('field')}>
                 <label>Email</label>
-                <input name="email" type="email" value={formData.email} onChange={handleChange} />
+                <input className={tw('form-control')} name="email" type="email" value={formData.email} onChange={handleChange} />
                 {errors.email && <small>{errors.email}</small>}
               </div>
-              <div className="field">
+              <div className={tw('field')}>
                 <label>Mobile Number</label>
-                <input name="mobile" value={formData.mobile} onChange={handleChange} />
+                <input className={tw('form-control')} name="mobile" value={formData.mobile} onChange={handleChange} />
                 {errors.mobile && <small>{errors.mobile}</small>}
               </div>
             </div>
           </div>
 
-          <div className="checkout-step">
-            <span className="section-label">Step 2</span>
+          <div className={tw('checkout-step')}>
+            <span className={tw('section-label')}>Step 2</span>
             <h3>Shipping Address</h3>
-            <div className="field-grid two-columns">
-              <div className="field full-span">
+            <div className={tw('field-grid two-columns')}>
+              <div className={tw('field full-span')}>
                 <label>House/Flat Number</label>
-                <input name="address" value={formData.address} onChange={handleChange} />
+                <input className={tw('form-control')} name="address" value={formData.address} onChange={handleChange} />
                 {errors.address && <small>{errors.address}</small>}
               </div>
-              <div className="field">
+              <div className={tw('field')}>
                 <label>City</label>
-                <input name="city" value={formData.city} onChange={handleChange} />
+                <input className={tw('form-control')} name="city" value={formData.city} onChange={handleChange} />
                 {errors.city && <small>{errors.city}</small>}
               </div>
-              <div className="field">
+              <div className={tw('field')}>
                 <label>State</label>
-                <input name="state" value={formData.state} onChange={handleChange} />
+                <input className={tw('form-control')} name="state" value={formData.state} onChange={handleChange} />
                 {errors.state && <small>{errors.state}</small>}
               </div>
-              <div className="field">
+              <div className={tw('field')}>
                 <label>Country</label>
-                <input name="country" value={formData.country} onChange={handleChange} />
+                <input className={tw('form-control')} name="country" value={formData.country} onChange={handleChange} />
               </div>
-              <div className="field">
+              <div className={tw('field')}>
                 <label>PIN Code</label>
-                <input name="pincode" value={formData.pincode} onChange={handleChange} />
+                <input className={tw('form-control')} name="pincode" value={formData.pincode} onChange={handleChange} />
                 {errors.pincode && <small>{errors.pincode}</small>}
               </div>
             </div>
           </div>
 
-          <div className="checkout-step">
-            <span className="section-label">Step 3</span>
+          <div className={tw('checkout-step')}>
+            <span className={tw('section-label')}>Step 3</span>
             <h3>Delivery Method</h3>
-            <div className="radio-list">
+            <div className={tw('radio-list')}>
               {['Standard Delivery', 'Express Delivery', 'Pickup at Store'].map((method) => (
-                <label key={method} className="radio-option">
-                  <input
+                <label key={method} className={tw('radio-option')}>
+                  <input className={tw('form-control')}
                     type="radio"
                     name="deliveryMethod"
                     value={method}
@@ -956,13 +936,13 @@ function CheckoutPage({ cart, total, shipping }) {
             </div>
           </div>
 
-          <div className="checkout-step">
-            <span className="section-label">Step 4</span>
+          <div className={tw('checkout-step')}>
+            <span className={tw('section-label')}>Step 4</span>
             <h3>Payment Method</h3>
-            <div className="radio-list">
+            <div className={tw('radio-list')}>
               {['UPI', 'Credit/Debit Cards', 'Net Banking', 'Wallets', 'Cash on Delivery'].map((method) => (
-                <label key={method} className="radio-option">
-                  <input
+                <label key={method} className={tw('radio-option')}>
+                  <input className={tw('form-control')}
                     type="radio"
                     name="paymentMethod"
                     value={method}
@@ -975,16 +955,16 @@ function CheckoutPage({ cart, total, shipping }) {
             </div>
           </div>
 
-          <button type="submit" className="primary-btn full-width justify-center">
+          <button type="submit" className={tw('primary-btn full-width justify-center')}>
             Place Order
           </button>
         </form>
 
-        <aside className="summary-panel checkout-summary">
+        <aside className={tw('summary-panel checkout-summary')}>
           <h3>Order Summary</h3>
-          <div className="summary-items">
+          <div className={tw('summary-items')}>
             {cart.map((item) => (
-              <div key={`${item.id}-${item.variant}`} className="summary-item">
+              <div key={`${item.id}-${item.variant}`} className={tw('summary-item')}>
                 <span>
                   {item.name} x {item.quantity}
                 </span>
@@ -992,19 +972,19 @@ function CheckoutPage({ cart, total, shipping }) {
               </div>
             ))}
           </div>
-          <div className="summary-line">
+          <div className={tw('summary-line')}>
             <span>Subtotal</span>
             <strong>{formatPrice(total)}</strong>
           </div>
-          <div className="summary-line">
+          <div className={tw('summary-line')}>
             <span>Shipping</span>
             <strong>{shipping === 0 ? 'Free' : formatPrice(shipping)}</strong>
           </div>
-          <div className="summary-line">
+          <div className={tw('summary-line')}>
             <span>Discount</span>
-            <strong>-₹699</strong>
+            <strong>-â‚¹699</strong>
           </div>
-          <div className="summary-total">
+          <div className={tw('summary-total')}>
             <span>Grand Total</span>
             <strong>{formatPrice(Math.max(total + shipping - 699, 0))}</strong>
           </div>
@@ -1018,55 +998,55 @@ function AccountPage() {
   const [activeTab, setActiveTab] = useState('login')
 
   return (
-    <section className="section-wrap">
-      <div className="container account-layout">
-        <div className="account-card">
-          <div className="tab-switcher">
-            <button type="button" className={activeTab === 'login' ? 'active' : ''} onClick={() => setActiveTab('login')}>
+    <section className={tw('section-wrap')}>
+      <div className={tw('container account-layout')}>
+        <div className={tw('account-card')}>
+          <div className={tw('tab-switcher')}>
+            <button type="button" className={tw(`rounded-t-xl px-4 py-3 text-sm font-semibold ${activeTab === 'login' ? 'active' : 'text-[#817970]'}`)} onClick={() => setActiveTab('login')}>
               Login
             </button>
-            <button type="button" className={activeTab === 'signup' ? 'active' : ''} onClick={() => setActiveTab('signup')}>
+            <button type="button" className={tw(`rounded-t-xl px-4 py-3 text-sm font-semibold ${activeTab === 'signup' ? 'active' : 'text-[#817970]'}`)} onClick={() => setActiveTab('signup')}>
               Sign Up
             </button>
           </div>
 
           {activeTab === 'login' ? (
-            <form className="account-form">
-              <div className="field">
+            <form className={tw('account-form')}>
+              <div className={tw('field')}>
                 <label>Email</label>
-                <input type="email" placeholder="name@example.com" />
+                <input className={tw('form-control')} type="email" placeholder="name@example.com" />
               </div>
-              <div className="field">
+              <div className={tw('field')}>
                 <label>Password</label>
-                <input type="password" placeholder="••••••••" />
+                <input className={tw('form-control')} type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" />
               </div>
-              <button type="button" className="primary-btn full-width justify-center">
+              <button type="button" className={tw('primary-btn full-width justify-center')}>
                 Login
               </button>
             </form>
           ) : (
-            <form className="account-form">
-              <div className="field">
+            <form className={tw('account-form')}>
+              <div className={tw('field')}>
                 <label>Full Name</label>
-                <input type="text" placeholder="Enter full name" />
+                <input className={tw('form-control')} type="text" placeholder="Enter full name" />
               </div>
-              <div className="field">
+              <div className={tw('field')}>
                 <label>Email</label>
-                <input type="email" placeholder="name@example.com" />
+                <input className={tw('form-control')} type="email" placeholder="name@example.com" />
               </div>
-              <div className="field">
+              <div className={tw('field')}>
                 <label>Password</label>
-                <input type="password" placeholder="Create password" />
+                <input className={tw('form-control')} type="password" placeholder="Create password" />
               </div>
-              <button type="button" className="primary-btn full-width justify-center">
+              <button type="button" className={tw('primary-btn full-width justify-center')}>
                 Create Account
               </button>
             </form>
           )}
         </div>
 
-        <div className="account-card account-info">
-          <span className="section-label">Customer Access</span>
+        <div className={tw('account-card account-info')}>
+          <span className={tw('section-label')}>Customer Access</span>
           <h3>Everything you need after purchase</h3>
           <ul>
             <li>Wishlist saved for future picks</li>
@@ -1180,143 +1160,143 @@ function AdminPage({ products, onAddProduct, onUpdateProduct, onDeleteProduct })
   }
 
   return (
-    <section className="section-wrap">
-      <div className="container admin-layout">
-        <div className="admin-header">
+    <section className={tw('section-wrap')}>
+      <div className={tw('container admin-layout')}>
+        <div className={tw('admin-header')}>
           <div>
-            <span className="section-label">Admin Dashboard</span>
-            <h2 className="section-title">Luxury Brand Inventory</h2>
+            <span className={tw('section-label')}>Admin Dashboard</span>
+            <h2 className={tw('section-title')}>Luxury Brand Inventory</h2>
           </div>
-          <button type="button" className="secondary-btn" onClick={resetForm}>Reset Form</button>
+          <button type="button" className={tw('secondary-btn')} onClick={resetForm}>Reset Form</button>
         </div>
 
-        <div className="admin-metrics">
-          <div className="metric-card">
+        <div className={tw('admin-metrics')}>
+          <div className={tw('metric-card')}>
             <span>Total Products</span>
             <strong>{products.length}</strong>
           </div>
-          <div className="metric-card">
+          <div className={tw('metric-card')}>
             <span>Featured Stock</span>
             <strong>{products.reduce((sum, item) => sum + item.stock, 0)}</strong>
           </div>
-          <div className="metric-card">
+          <div className={tw('metric-card')}>
             <span>Avg Rating</span>
             <strong>{(products.reduce((sum, item) => sum + item.rating, 0) / (products.length || 1)).toFixed(1)}</strong>
           </div>
-          <div className="metric-card">
+          <div className={tw('metric-card')}>
             <span>Best Seller</span>
             <strong>{products[0]?.name?.split(' ')[0] || 'New'}</strong>
           </div>
         </div>
 
-        <div className="admin-panels">
-          <div className="admin-card">
+        <div className={tw('admin-panels')}>
+          <div className={tw('admin-card')}>
             <h3>{editingId ? 'Edit Product' : 'Add New Product'}</h3>
-            <form className="account-form" onSubmit={handleSubmit}>
-              <div className="field-grid two-columns">
-                <div className="field">
+            <form className={tw('account-form')} onSubmit={handleSubmit}>
+              <div className={tw('field-grid two-columns')}>
+                <div className={tw('field')}>
                   <label htmlFor="name">Product Name</label>
-                  <input id="name" name="name" value={form.name} onChange={handleInputChange} placeholder="Royal Silk Saree" required />
+                  <input className={tw('form-control')} id="name" name="name" value={form.name} onChange={handleInputChange} placeholder="Royal Silk Saree" required />
                 </div>
-                <div className="field">
+                <div className={tw('field')}>
                   <label htmlFor="category">Category</label>
-                  <input id="category" name="category" value={form.category} onChange={handleInputChange} required />
+                  <input className={tw('form-control')} id="category" name="category" value={form.category} onChange={handleInputChange} required />
                 </div>
-                <div className="field">
+                <div className={tw('field')}>
                   <label htmlFor="fabric">Fabric</label>
-                  <input id="fabric" name="fabric" value={form.fabric} onChange={handleInputChange} required />
+                  <input className={tw('form-control')} id="fabric" name="fabric" value={form.fabric} onChange={handleInputChange} required />
                 </div>
-                <div className="field">
+                <div className={tw('field')}>
                   <label htmlFor="occasion">Occasion</label>
-                  <input id="occasion" name="occasion" value={form.occasion} onChange={handleInputChange} required />
+                  <input className={tw('form-control')} id="occasion" name="occasion" value={form.occasion} onChange={handleInputChange} required />
                 </div>
-                <div className="field">
+                <div className={tw('field')}>
                   <label htmlFor="price">Price</label>
-                  <input id="price" name="price" type="number" value={form.price} onChange={handleInputChange} required />
+                  <input className={tw('form-control')} id="price" name="price" type="number" value={form.price} onChange={handleInputChange} required />
                 </div>
-                <div className="field">
+                <div className={tw('field')}>
                   <label htmlFor="discountedPrice">Selling Price</label>
-                  <input id="discountedPrice" name="discountedPrice" type="number" value={form.discountedPrice} onChange={handleInputChange} required />
+                  <input className={tw('form-control')} id="discountedPrice" name="discountedPrice" type="number" value={form.discountedPrice} onChange={handleInputChange} required />
                 </div>
-                <div className="field">
+                <div className={tw('field')}>
                   <label htmlFor="discount">Discount %</label>
-                  <input id="discount" name="discount" type="number" value={form.discount} onChange={handleInputChange} />
+                  <input className={tw('form-control')} id="discount" name="discount" type="number" value={form.discount} onChange={handleInputChange} />
                 </div>
-                <div className="field">
+                <div className={tw('field')}>
                   <label htmlFor="stock">Stock</label>
-                  <input id="stock" name="stock" type="number" value={form.stock} onChange={handleInputChange} required />
+                  <input className={tw('form-control')} id="stock" name="stock" type="number" value={form.stock} onChange={handleInputChange} required />
                 </div>
-                <div className="field">
+                <div className={tw('field')}>
                   <label htmlFor="rating">Rating</label>
-                  <input id="rating" name="rating" type="number" step="0.1" value={form.rating} onChange={handleInputChange} required />
+                  <input className={tw('form-control')} id="rating" name="rating" type="number" step="0.1" value={form.rating} onChange={handleInputChange} required />
                 </div>
-                <div className="field">
+                <div className={tw('field')}>
                   <label htmlFor="reviews">Reviews</label>
-                  <input id="reviews" name="reviews" type="number" value={form.reviews} onChange={handleInputChange} required />
+                  <input className={tw('form-control')} id="reviews" name="reviews" type="number" value={form.reviews} onChange={handleInputChange} required />
                 </div>
-                <div className="field full-span">
+                <div className={tw('field full-span')}>
                   <label htmlFor="colors">Colors (comma separated)</label>
-                  <input id="colors" name="colors" value={form.colors} onChange={handleInputChange} required />
+                  <input className={tw('form-control')} id="colors" name="colors" value={form.colors} onChange={handleInputChange} required />
                 </div>
-                <div className="field">
+                <div className={tw('field')}>
                   <label htmlFor="color">Primary Color</label>
-                  <input id="color" name="color" value={form.color} onChange={handleInputChange} required />
+                  <input className={tw('form-control')} id="color" name="color" value={form.color} onChange={handleInputChange} required />
                 </div>
-                <div className="field">
+                <div className={tw('field')}>
                   <label htmlFor="material">Material</label>
-                  <input id="material" name="material" value={form.material} onChange={handleInputChange} required />
+                  <input className={tw('form-control')} id="material" name="material" value={form.material} onChange={handleInputChange} required />
                 </div>
-                <div className="field">
+                <div className={tw('field')}>
                   <label htmlFor="length">Length</label>
-                  <input id="length" name="length" value={form.length} onChange={handleInputChange} required />
+                  <input className={tw('form-control')} id="length" name="length" value={form.length} onChange={handleInputChange} required />
                 </div>
-                <div className="field">
+                <div className={tw('field')}>
                   <label htmlFor="blouse">Blouse</label>
-                  <input id="blouse" name="blouse" value={form.blouse} onChange={handleInputChange} required />
+                  <input className={tw('form-control')} id="blouse" name="blouse" value={form.blouse} onChange={handleInputChange} required />
                 </div>
-                <div className="field full-span">
+                <div className={tw('field full-span')}>
                   <label htmlFor="images">Image URLs (comma separated)</label>
-                  <textarea id="images" name="images" value={form.images} onChange={handleInputChange} rows="3" required />
+                  <textarea className={tw('form-control')} id="images" name="images" value={form.images} onChange={handleInputChange} rows="3" required />
                 </div>
-                <div className="field full-span">
+                <div className={tw('field full-span')}>
                   <label htmlFor="description">Description</label>
-                  <textarea id="description" name="description" value={form.description} onChange={handleInputChange} rows="4" required />
+                  <textarea className={tw('form-control')} id="description" name="description" value={form.description} onChange={handleInputChange} rows="4" required />
                 </div>
-                <div className="field full-span">
+                <div className={tw('field full-span')}>
                   <label htmlFor="care">Care Instructions</label>
-                  <input id="care" name="care" value={form.care} onChange={handleInputChange} required />
+                  <input className={tw('form-control')} id="care" name="care" value={form.care} onChange={handleInputChange} required />
                 </div>
               </div>
 
-              <div className="purchase-row" style={{ marginTop: '1rem' }}>
-                <button type="submit" className="primary-btn">
+              <div className={tw('purchase-row mt-4')}>
+                <button type="submit" className={tw('primary-btn')}>
                   {editingId ? 'Update Product' : 'Add Product'}
                 </button>
                 {editingId && (
-                  <button type="button" className="secondary-btn" onClick={resetForm}>Cancel</button>
+                  <button type="button" className={tw('secondary-btn')} onClick={resetForm}>Cancel</button>
                 )}
               </div>
             </form>
           </div>
 
-          <div className="admin-card">
+          <div className={tw('admin-card')}>
             <h3>Current Inventory</h3>
-            <div className="admin-product-list">
+            <div className={tw('admin-product-list')}>
               {products.map((product) => (
-                <div key={product.id} className="admin-product-item">
-                  <div className="admin-product-top">
+                <div key={product.id} className={tw('admin-product-item')}>
+                  <div className={tw('admin-product-top')}>
                     <div>
                       <strong>{product.name}</strong>
-                      <div className="admin-product-meta">
+                      <div className={tw('admin-product-meta')}>
                         <span>{product.category}</span>
                         <span>{product.stock} in stock</span>
                       </div>
                     </div>
-                    <span className="discount-tag">₹{product.discountedPrice}</span>
+                    <span className={tw('discount-tag')}>â‚¹{product.discountedPrice}</span>
                   </div>
-                  <div className="admin-product-actions">
-                    <button type="button" className="secondary-btn" onClick={() => handleEdit(product)}>Edit</button>
-                    <button type="button" className="icon-button" onClick={() => handleDelete(product.id)} aria-label={`Delete ${product.name}`}>
+                  <div className={tw('admin-product-actions')}>
+                    <button type="button" className={tw('secondary-btn')} onClick={() => handleEdit(product)}>Edit</button>
+                    <button type="button" className={tw('icon-button')} onClick={() => handleDelete(product.id)} aria-label={`Delete ${product.name}`}>
                       <Trash2 size={16} />
                     </button>
                   </div>
@@ -1330,56 +1310,14 @@ function AdminPage({ products, onAddProduct, onUpdateProduct, onDeleteProduct })
   )
 }
 
-function QuickViewModal({ product, addToCart, onClose }) {
-  return (
-    <motion.div
-      className="modal-overlay"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      onClick={onClose}
-    >
-      <motion.div
-        className="quick-view-modal"
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 30, opacity: 0 }}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <button type="button" className="modal-close" onClick={onClose} aria-label="Close quick view">
-          <X size={18} />
-        </button>
-        <div className="quick-view-grid">
-          <img src={product.images[0]} alt={product.name} />
-          <div>
-            <span className="section-label">{product.category}</span>
-            <h3>{product.name}</h3>
-            <div className="price-row">
-              <span className="current-price">{formatPrice(product.discountedPrice)}</span>
-              <span className="old-price">{formatPrice(product.price)}</span>
-            </div>
-            <p>{product.description}</p>
-            <button type="button" className="primary-btn full-width justify-center" onClick={() => { addToCart(product, 1); onClose(); }}>
-              Add to Cart
-            </button>
-            <Link to={`/product/${product.id}`} className="secondary-btn full-width justify-center" onClick={onClose}>
-              View Details
-            </Link>
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
-  )
-}
-
 function NotFound() {
   return (
-    <section className="section-wrap">
-      <div className="container empty-state large-empty">
+    <section className={tw('section-wrap')}>
+      <div className={tw('container empty-state large-empty')}>
         <Search size={42} />
         <h2>Nothing found here</h2>
         <p>The page you are looking for is unavailable.</p>
-        <Link to="/shop" className="primary-btn">
+        <Link to="/shop" className={tw('primary-btn')}>
           Explore Sarees
           <ArrowRight size={18} />
         </Link>
