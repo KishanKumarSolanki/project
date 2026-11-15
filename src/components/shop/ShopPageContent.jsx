@@ -50,7 +50,8 @@ function ShopPageContent({
         </div>
 
         <div className="relative mt-4 border-b border-[#e5dcc8]">
-          <div className="mx-auto flex max-w-7xl snap-x gap-2.5 overflow-x-auto px-4 pb-4 [scrollbar-width:none] sm:gap-3 sm:px-7">
+          <div className="mx-auto flex max-w-7xl snap-x gap-2.5 overflow-x-auto pr-4 pb-4 [scrollbar-width:none] sm:gap-3 sm:pr-7">
+            <div className="shrink-0 w-[10px]" aria-hidden="true" />
             {shopTabs.map((tab) => {
               const isActive = activeTab === tab.name
               return (
