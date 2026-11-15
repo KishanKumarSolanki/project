@@ -4,6 +4,7 @@ import {
   Link,
   Route,
   Routes,
+  useLocation,
   useSearchParams,
   useNavigate,
   useParams,
@@ -24,6 +25,7 @@ import { shopTabs } from './data/shopCollections'
 import Footer from './components/Footer'
 import Header from './components/Header'
 import ProductCard from './components/ProductCard'
+import WishlistProductCard from './components/WishlistProductCard'
 import ImageWithFallback from './components/ImageWithFallback'
 import MobileBottomNav from './components/MobileBottomNav'
 import SupportBubble from './components/SupportBubble'
@@ -39,6 +41,16 @@ import TestimonialsSection from './components/home/TestimonialsSection'
 import { formatPrice } from './utils/formatPrice'
 
 const PRODUCT_STORAGE_KEY = 'ananyaCatalog'
+
+function ScrollToTop() {
+  const { pathname } = useLocation()
+
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
+
+  return null
+}
 
 const utilityClasses = {
   'section-wrap': 'w-full px-4 py-10 sm:px-7 sm:py-16',
@@ -272,6 +284,7 @@ function App() {
 
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <div className={tw('min-h-screen bg-[#f8f5e9] pb-20 text-[#2c1e19] md:pb-0')}>
         <Header cartCount={cartCount} wishlist={wishlist} />
         <main>
@@ -327,9 +340,7 @@ function App() {
               element={
                 <WishlistPage
                   products={catalog.filter((product) => wishlist.includes(product.id))}
-                  addToCart={addToCart}
                   toggleWishlist={toggleWishlist}
-                  wishlist={wishlist}
                 />
               }
             />
@@ -388,7 +399,7 @@ function HomePage({ addToCart, toggleWishlist, wishlist, products }) {
   )
 }
 
-function WishlistPage({ products, addToCart, toggleWishlist, wishlist }) {
+function WishlistPage({ products, toggleWishlist }) {
   return (
     <section className={tw('mx-auto min-h-[70vh] max-w-7xl px-4 py-10 sm:px-7 sm:py-16')}>
       <div className={tw('mb-8')}>
@@ -396,9 +407,9 @@ function WishlistPage({ products, addToCart, toggleWishlist, wishlist }) {
         <h1 className={tw('mt-2 text-4xl font-semibold tracking-tight text-[#2c1e19] sm:text-5xl')}>Wishlist</h1>
       </div>
       {products.length ? (
-        <div className={tw('flex snap-x snap-mandatory gap-4 overflow-x-auto pb-3 [scrollbar-width:none] sm:flex-wrap')}>
+        <div className={tw('grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4')}>
           {products.map((product) => (
-            <ProductCard key={product.id} product={product} addToCart={addToCart} toggleWishlist={toggleWishlist} isWishlisted={wishlist.includes(product.id)} />
+            <WishlistProductCard key={product.id} product={product} toggleWishlist={toggleWishlist} />
           ))}
         </div>
       ) : (

@@ -22,9 +22,9 @@ function HeroSection() {
           <p className="mx-auto mt-5 max-w-2xl text-[16px] leading-7 text-[#71645b] sm:mt-7 sm:text-xl sm:leading-9">
             Banarasi, organza, kora silk and more — real zari, real handloom, delivered to your door.
           </p>
-          <div className="mx-auto mt-7 flex max-w-md flex-col gap-3 sm:mt-9 sm:flex-row sm:justify-center">
-            <Link to="/shop" className="inline-flex min-h-14 items-center justify-center rounded-2xl bg-[#b88a3e] px-8 text-base font-semibold text-[#2c1e19] shadow-sm transition hover:bg-[#a77b34]">Shop all sarees</Link>
-            <Link to="/shop?sort=new" className="inline-flex min-h-14 items-center justify-center rounded-2xl border border-[#2c1e19] px-8 text-base font-semibold text-[#2c1e19] transition hover:bg-[#eee7d7]">See new arrivals</Link>
+          <div className="mx-auto mt-7 flex w-full max-w-md flex-row gap-2 sm:mt-9 sm:w-auto sm:gap-3 sm:justify-center">
+            <Link to="/shop" className="inline-flex min-h-14 min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-2xl bg-[#b88a3e] px-2 text-sm font-semibold text-[#2c1e19] shadow-sm transition hover:bg-[#a77b34] sm:flex-none sm:px-8 sm:text-base">Shop all sarees</Link>
+            <Link to="/shop?sort=new" className="inline-flex min-h-14 min-w-0 flex-1 items-center justify-center whitespace-nowrap rounded-2xl border border-[#2c1e19] px-2 text-sm font-semibold text-[#2c1e19] transition hover:bg-[#eee7d7] sm:flex-none sm:px-8 sm:text-base">See new arrivals</Link>
           </div>
         </div>
 
