@@ -41,6 +41,10 @@ import TestimonialsSection from './components/home/TestimonialsSection'
 import { formatPrice } from './utils/formatPrice'
 
 const PRODUCT_STORAGE_KEY = 'ananyaCatalog'
+const LINEN_SAREE_MIGRATION_KEY = 'ananyaCatalogLinenSareeSeeded'
+const MUNGA_MASHRU_MIGRATION_KEY = 'ananyaCatalogMungaMashruSeeded'
+const LINEN_COTTON_MIGRATION_KEY = 'ananyaCatalogLinenCottonSeeded'
+const NAVY_LINEN_MIGRATION_KEY = 'ananyaCatalogNavyLinenSeeded'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -202,6 +206,54 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem('sareeWishlist', JSON.stringify(wishlist))
   }, [wishlist])
+
+  useEffect(() => {
+    if (window.localStorage.getItem(LINEN_SAREE_MIGRATION_KEY) === 'true') return
+
+    const linenSaree = products.find((product) => product.id === 'floral-printed-pure-linen-saree')
+    if (linenSaree) {
+      setCatalog((current) => current.some((product) => product.id === linenSaree.id)
+        ? current
+        : [linenSaree, ...current])
+    }
+    window.localStorage.setItem(LINEN_SAREE_MIGRATION_KEY, 'true')
+  }, [])
+
+  useEffect(() => {
+    if (window.localStorage.getItem(MUNGA_MASHRU_MIGRATION_KEY) === 'true') return
+
+    const mungaMashruSaree = products.find((product) => product.id === 'munga-mashru-pure-silk-saree')
+    if (mungaMashruSaree) {
+      setCatalog((current) => current.some((product) => product.id === mungaMashruSaree.id)
+        ? current
+        : [mungaMashruSaree, ...current])
+    }
+    window.localStorage.setItem(MUNGA_MASHRU_MIGRATION_KEY, 'true')
+  }, [])
+
+  useEffect(() => {
+    if (window.localStorage.getItem(LINEN_COTTON_MIGRATION_KEY) === 'true') return
+
+    const linenCottonSaree = products.find((product) => product.id === 'linen-cotton-block-printed-saree')
+    if (linenCottonSaree) {
+      setCatalog((current) => current.some((product) => product.id === linenCottonSaree.id)
+        ? current
+        : [linenCottonSaree, ...current])
+    }
+    window.localStorage.setItem(LINEN_COTTON_MIGRATION_KEY, 'true')
+  }, [])
+
+  useEffect(() => {
+    if (window.localStorage.getItem(NAVY_LINEN_MIGRATION_KEY) === 'true') return
+
+    const navyLinenSaree = products.find((product) => product.id === 'navy-blue-pure-linen-saree')
+    if (navyLinenSaree) {
+      setCatalog((current) => current.some((product) => product.id === navyLinenSaree.id)
+        ? current
+        : [navyLinenSaree, ...current])
+    }
+    window.localStorage.setItem(NAVY_LINEN_MIGRATION_KEY, 'true')
+  }, [])
 
   useEffect(() => {
     window.localStorage.setItem(PRODUCT_STORAGE_KEY, JSON.stringify(catalog))
@@ -553,8 +605,12 @@ function ProductDetail({ addToCart, toggleWishlist, wishlist, products, product 
 
             <div className={tw('price-row')}>
               <span className={tw('current-price')}>{formatPrice(product.discountedPrice)}</span>
-              <span className={tw('old-price')}>{formatPrice(product.price)}</span>
-              <span className={tw('discount-tag')}>{product.discount}% Off</span>
+              {product.discount > 0 && (
+                <>
+                  <span className={tw('old-price')}>{formatPrice(product.price)}</span>
+                  <span className={tw('discount-tag')}>{product.discount}% Off</span>
+                </>
+              )}
             </div>
 
             <p className={tw('product-description')}>{product.description}</p>

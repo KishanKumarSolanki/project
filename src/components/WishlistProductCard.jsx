@@ -24,9 +24,11 @@ function WishlistProductCard({ product, toggleWishlist, isWishlisted = true }) {
             <span className="absolute left-2.5 top-2.5 rounded-full bg-[#2c1e19] px-2.5 py-1 text-[9px] font-semibold uppercase tracking-wide text-white">
               {product.badge || 'Handwoven'}
             </span>
-            <span className="absolute right-2.5 top-2.5 rounded-full bg-[#009e78] px-2.5 py-1 text-[10px] font-bold text-white">
-              -{product.discount}%
-            </span>
+            {product.discount > 0 && (
+              <span className="absolute right-2.5 top-2.5 rounded-full bg-[#009e78] px-2.5 py-1 text-[10px] font-bold text-white">
+                -{product.discount}%
+              </span>
+            )}
           </div>
         </Link>
         <button
@@ -49,7 +51,7 @@ function WishlistProductCard({ product, toggleWishlist, isWishlisted = true }) {
           </h2>
           <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <strong className="text-sm text-[#2c1e19] sm:text-base">{formatPrice(product.discountedPrice)}</strong>
-            <span className="text-[10px] text-[#817970] line-through sm:text-xs">{formatPrice(product.price)}</span>
+            {product.discount > 0 && <span className="text-[10px] text-[#817970] line-through sm:text-xs">{formatPrice(product.price)}</span>}
           </div>
         </div>
       </Link>

@@ -18,7 +18,7 @@ function ProductCard({ product, addToCart, toggleWishlist, isWishlisted }) {
           <ImageWithFallback src={product.images[0]} alt={product.name} className="h-full w-full object-cover transition duration-700 hover:scale-[1.03]" />
         </Link>
         <span className="absolute left-3 top-3 rounded-full bg-[#2c1e19] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-white">{product.badge || 'Handwoven'}</span>
-        <span className="absolute right-3 top-3 rounded-full bg-[#009e78] px-3 py-1.5 text-xs font-bold text-white">-{product.discount}%</span>
+        {product.discount > 0 && <span className="absolute right-3 top-3 rounded-full bg-[#009e78] px-3 py-1.5 text-xs font-bold text-white">-{product.discount}%</span>}
         <button
           type="button"
           onClick={() => toggleWishlist(product.id)}
@@ -45,8 +45,12 @@ function ProductCard({ product, addToCart, toggleWishlist, isWishlisted }) {
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1">
           <strong className="text-xl text-[#2c1e19]">{formatPrice(product.discountedPrice)}</strong>
-          <span className="text-sm text-[#817970] line-through">{formatPrice(product.price)}</span>
-          <span className="rounded-full bg-[#eaf7f1] px-2.5 py-1 text-xs font-semibold text-[#247b5c]">Save {formatPrice(product.price - product.discountedPrice)}</span>
+          {product.discount > 0 && (
+            <>
+              <span className="text-sm text-[#817970] line-through">{formatPrice(product.price)}</span>
+              <span className="rounded-full bg-[#eaf7f1] px-2.5 py-1 text-xs font-semibold text-[#247b5c]">Save {formatPrice(product.price - product.discountedPrice)}</span>
+            </>
+          )}
         </div>
         <button type="button" onClick={() => addToCart(product, 1)} className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#2c1e19] px-4 text-sm font-semibold text-[#fffdf7] transition hover:bg-[#49352c]">
           <ShoppingBag size={18} /> Add to bag
