@@ -20,8 +20,19 @@ import {
   Star,
   Trash2,
 } from 'lucide-react'
+import {
+  createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  updateProfile,
+} from 'firebase/auth'
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
 import { products } from './data/products'
 import { shopTabs } from './data/shopCollections'
+import { auth, db } from './firebase'
 import Footer from './components/Footer'
 import Header from './components/Header'
 import ProductCard from './components/ProductCard'
@@ -861,6 +872,9 @@ function CartPage({ cart, subtotal, shipping, discount, updateQuantity, removeFr
 
 function CheckoutPage({ cart, total, shipping }) {
   const navigate = useNavigate()
+  const [firebaseUser, setFirebaseUser] = useState(auth.currentUser)
+  const [isSavingAddress, setIsSavingAddress] = useState(false)
+  const [submitError, setSubmitError] = useState('')
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -876,9 +890,25 @@ function CheckoutPage({ cart, total, shipping }) {
   const [errors, setErrors] = useState({})
   const [submitted, setSubmitted] = useState(false)
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setFirebaseUser(currentUser)
+      if (currentUser) {
+        setFormData((current) => ({
+          ...current,
+          fullName: current.fullName || currentUser.displayName || '',
+          email: current.email || currentUser.email || '',
+        }))
+      }
+    })
+
+    return unsubscribe
+  }, [])
+
   const handleChange = (event) => {
     const { name, value } = event.target
     setFormData((current) => ({ ...current, [name]: value }))
+    setSubmitError('')
   }
 
   const validateForm = () => {
@@ -895,8 +925,9 @@ function CheckoutPage({ cart, total, shipping }) {
     return nextErrors
   }
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
+    setSubmitError('')
 
     if (!cart.length) {
       navigate('/shop')
@@ -907,6 +938,23 @@ function CheckoutPage({ cart, total, shipping }) {
     setErrors(nextErrors)
 
     if (Object.keys(nextErrors).length > 0) return
+
+    const currentUser = auth.currentUser
+    if (currentUser) {
+      setIsSavingAddress(true)
+      try {
+        await saveCheckoutAddress(currentUser, formData)
+      } catch (error) {
+        setSubmitError(
+          error?.code === 'permission-denied'
+            ? 'Your address could not be saved. Firestore rules must allow signed-in users to update their own users/{uid} document.'
+            : 'Your address could not be saved to Firebase. Please try again.',
+        )
+        return
+      } finally {
+        setIsSavingAddress(false)
+      }
+    }
 
     setSubmitted(true)
   }
@@ -956,6 +1004,11 @@ function CheckoutPage({ cart, total, shipping }) {
           <div className={tw('checkout-step')}>
             <span className={tw('section-label')}>Step 2</span>
             <h3>Shipping Address</h3>
+            <p className={tw('mb-4 text-sm text-[#71645b]')}>
+              {firebaseUser
+                ? 'This address will be saved to your account.'
+                : 'Sign in to save this address to your account. Guest checkout is still available.'}
+            </p>
             <div className={tw('field-grid two-columns')}>
               <div className={tw('field full-span')}>
                 <label>House/Flat Number</label>
@@ -1022,8 +1075,18 @@ function CheckoutPage({ cart, total, shipping }) {
             </div>
           </div>
 
-          <button type="submit" className={tw('primary-btn full-width justify-center')}>
-            Place Order
+          {submitError && (
+            <p role="alert" className={tw('text-sm text-red-700')}>
+              {submitError}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            className={tw('primary-btn full-width justify-center')}
+            disabled={isSavingAddress}
+          >
+            {isSavingAddress ? 'Saving address...' : 'Place Order'}
           </button>
         </form>
 
@@ -1061,54 +1124,348 @@ function CheckoutPage({ cart, total, shipping }) {
   )
 }
 
+const googleProvider = new GoogleAuthProvider()
+
+const getAuthErrorMessage = (error) => {
+  const messages = {
+    'auth/email-already-in-use': 'This email is already registered. Please log in instead.',
+    'auth/invalid-credential': 'Email or password is incorrect.',
+    'auth/invalid-email': 'Enter a valid email address.',
+    'auth/network-request-failed': 'Network error. Check your connection and try again.',
+    'auth/operation-not-allowed': 'This sign-in method is not enabled in Firebase Console.',
+    'auth/popup-blocked': 'Your browser blocked the Google sign-in popup. Allow popups and try again.',
+    'auth/popup-closed-by-user': 'Google sign-in was cancelled.',
+    'auth/unauthorized-domain': 'Add this website domain to Firebase Authentication authorized domains.',
+    'auth/weak-password': 'Choose a password with at least 6 characters.',
+    'auth/user-disabled': 'This account has been disabled.',
+  }
+
+  return messages[error?.code] || 'Unable to authenticate. Please try again.'
+}
+
+const saveUserProfile = async (firebaseUser) => {
+  const userRef = doc(db, 'users', firebaseUser.uid)
+  const profileSnapshot = await getDoc(userRef)
+  const existingProfile = profileSnapshot.exists() ? profileSnapshot.data() : {}
+
+  await setDoc(
+    userRef,
+    {
+      uid: firebaseUser.uid,
+      name:
+        firebaseUser.displayName ||
+        existingProfile.name ||
+        firebaseUser.email?.split('@')[0] ||
+        'Customer',
+      email: firebaseUser.email || existingProfile.email || null,
+      ...(firebaseUser.photoURL ? { photoURL: firebaseUser.photoURL } : {}),
+      ...(!profileSnapshot.exists()
+        ? { role: 'customer', createdAt: serverTimestamp() }
+        : {}),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
+}
+
+const getAddressKey = (address) => [
+  address.street,
+  address.city,
+  address.state,
+  address.zip,
+  address.country,
+].map((value) => String(value || '').trim().toLowerCase()).join('|')
+
+const saveCheckoutAddress = async (firebaseUser, formData) => {
+  const userRef = doc(db, 'users', firebaseUser.uid)
+  const profileSnapshot = await getDoc(userRef)
+  const profile = profileSnapshot.exists() ? profileSnapshot.data() : {}
+  const addresses = Array.isArray(profile.addresses)
+    ? profile.addresses.filter((address) => address && typeof address === 'object')
+    : []
+  const address = {
+    street: formData.address.trim(),
+    city: formData.city.trim(),
+    state: formData.state.trim(),
+    zip: formData.pincode.trim(),
+    country: formData.country.trim() || 'India',
+  }
+  const matchingAddressIndex = addresses.findIndex(
+    (savedAddress) => getAddressKey(savedAddress) === getAddressKey(address),
+  )
+  const hasDefaultAddress = addresses.some((savedAddress) => savedAddress.isDefault === true)
+  const makeDefault = !hasDefaultAddress
+  let nextAddresses
+
+  if (matchingAddressIndex >= 0) {
+    nextAddresses = addresses.map((savedAddress, index) => (
+      index === matchingAddressIndex && makeDefault
+        ? { ...savedAddress, isDefault: true }
+        : savedAddress
+    ))
+  } else {
+    nextAddresses = [
+      ...addresses.map((savedAddress) => (
+        makeDefault ? { ...savedAddress, isDefault: false } : savedAddress
+      )),
+      {
+        id: `addr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        ...address,
+        isDefault: makeDefault,
+        createdAt: new Date().toISOString(),
+      },
+    ]
+  }
+
+  await setDoc(
+    userRef,
+    {
+      uid: firebaseUser.uid,
+      name:
+        formData.fullName.trim() ||
+        firebaseUser.displayName ||
+        profile.name ||
+        firebaseUser.email?.split('@')[0] ||
+        'Customer',
+      email: formData.email.trim() || firebaseUser.email || profile.email || null,
+      ...(formData.mobile.trim() ? { phone: formData.mobile.trim() } : {}),
+      addresses: nextAddresses,
+      ...(!profileSnapshot.exists()
+        ? { role: 'customer', createdAt: serverTimestamp() }
+        : {}),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
+}
+
+const getProfileSyncErrorMessage = (error) => {
+  if (error?.code === 'permission-denied') {
+    return 'You are signed in, but Firestore rules blocked saving your profile. Allow users to write only their own users/{uid} document.'
+  }
+  return 'You are signed in, but your profile could not be saved to Firestore. Please try again.'
+}
+
 function AccountPage() {
   const [activeTab, setActiveTab] = useState('login')
+  const [user, setUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [formData, setFormData] = useState({ fullName: '', email: '', password: '' })
+  const [errorMessage, setErrorMessage] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      async (currentUser) => {
+        setUser(currentUser)
+        setAuthLoading(false)
+        setErrorMessage('')
+
+        if (currentUser) {
+          try {
+            await saveUserProfile(currentUser)
+          } catch (error) {
+            setErrorMessage(getProfileSyncErrorMessage(error))
+          }
+        }
+      },
+      (error) => {
+        setErrorMessage(getAuthErrorMessage(error))
+        setAuthLoading(false)
+      },
+    )
+
+    return unsubscribe
+  }, [])
+
+  const handleInputChange = (event) => {
+    const { name, value } = event.target
+    setFormData((current) => ({ ...current, [name]: value }))
+    setErrorMessage('')
+  }
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+    setErrorMessage('')
+    setIsSubmitting(true)
+
+    try {
+      if (activeTab === 'login') {
+        await signInWithEmailAndPassword(auth, formData.email.trim(), formData.password)
+      } else {
+        const credential = await createUserWithEmailAndPassword(
+          auth,
+          formData.email.trim(),
+          formData.password,
+        )
+        if (formData.fullName.trim()) {
+          await updateProfile(credential.user, { displayName: formData.fullName.trim() })
+        }
+      }
+    } catch (error) {
+      setErrorMessage(getAuthErrorMessage(error))
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleGoogleSignIn = async () => {
+    setErrorMessage('')
+    setIsSubmitting(true)
+
+    try {
+      await signInWithPopup(auth, googleProvider)
+    } catch (error) {
+      setErrorMessage(getAuthErrorMessage(error))
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleSignOut = async () => {
+    setErrorMessage('')
+    setIsSubmitting(true)
+
+    try {
+      await signOut(auth)
+    } catch (error) {
+      setErrorMessage(getAuthErrorMessage(error))
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   return (
     <section className={tw('section-wrap')}>
       <div className={tw('container account-layout')}>
         <div className={tw('account-card')}>
-          <div className={tw('tab-switcher')}>
-            <button type="button" className={tw(`rounded-t-xl px-4 py-3 text-sm font-semibold ${activeTab === 'login' ? 'active' : 'text-[#817970]'}`)} onClick={() => setActiveTab('login')}>
-              Login
-            </button>
-            <button type="button" className={tw(`rounded-t-xl px-4 py-3 text-sm font-semibold ${activeTab === 'signup' ? 'active' : 'text-[#817970]'}`)} onClick={() => setActiveTab('signup')}>
-              Sign Up
-            </button>
-          </div>
-
-          {activeTab === 'login' ? (
-            <form className={tw('account-form')}>
-              <div className={tw('field')}>
-                <label>Email</label>
-                <input className={tw('form-control')} type="email" placeholder="name@example.com" />
-              </div>
-              <div className={tw('field')}>
-                <label>Password</label>
-                <input className={tw('form-control')} type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" />
-              </div>
-              <button type="button" className={tw('primary-btn full-width justify-center')}>
-                Login
+          {authLoading ? (
+            <p role="status" className={tw('text-sm text-[#71645b]')}>Checking your account...</p>
+          ) : user ? (
+            <div className={tw('account-form')}>
+              <span className={tw('section-label')}>Signed in</span>
+              <h2 className={tw('text-2xl font-semibold text-[#2c1e19]')}>
+                Welcome, {user.displayName || user.email?.split('@')[0] || 'Customer'}
+              </h2>
+              <p className={tw('text-sm text-[#71645b]')}>{user.email}</p>
+              {errorMessage && <p role="alert" className={tw('text-sm text-red-700')}>{errorMessage}</p>}
+              <button
+                type="button"
+                className={tw('secondary-btn')}
+                onClick={handleSignOut}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'Signing out...' : 'Sign out'}
               </button>
-            </form>
+            </div>
           ) : (
-            <form className={tw('account-form')}>
-              <div className={tw('field')}>
-                <label>Full Name</label>
-                <input className={tw('form-control')} type="text" placeholder="Enter full name" />
+            <>
+              <div className={tw('tab-switcher')}>
+                <button
+                  type="button"
+                  className={tw(`rounded-t-xl px-4 py-3 text-sm font-semibold ${activeTab === 'login' ? 'active' : 'text-[#817970]'}`)}
+                  onClick={() => {
+                    setActiveTab('login')
+                    setErrorMessage('')
+                  }}
+                >
+                  Login
+                </button>
+                <button
+                  type="button"
+                  className={tw(`rounded-t-xl px-4 py-3 text-sm font-semibold ${activeTab === 'signup' ? 'active' : 'text-[#817970]'}`)}
+                  onClick={() => {
+                    setActiveTab('signup')
+                    setErrorMessage('')
+                  }}
+                >
+                  Sign Up
+                </button>
               </div>
-              <div className={tw('field')}>
-                <label>Email</label>
-                <input className={tw('form-control')} type="email" placeholder="name@example.com" />
-              </div>
-              <div className={tw('field')}>
-                <label>Password</label>
-                <input className={tw('form-control')} type="password" placeholder="Create password" />
-              </div>
-              <button type="button" className={tw('primary-btn full-width justify-center')}>
-                Create Account
+
+              {errorMessage && (
+                <p role="alert" className={tw('mb-4 text-sm text-red-700')}>
+                  {errorMessage}
+                </p>
+              )}
+
+              <button
+                type="button"
+                className={tw('secondary-btn full-width justify-center')}
+                onClick={handleGoogleSignIn}
+                disabled={isSubmitting}
+              >
+                <svg aria-hidden="true" viewBox="0 0 48 48" className={tw('h-5 w-5')}>
+                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5Z" />
+                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.76 7.18l7.73 6C44.42 38.05 46.98 31.97 46.98 24.55Z" />
+                  <path fill="#FBBC05" d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.88.93 7.55 2.56 10.78l7.97-6.19Z" />
+                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.91-5.8l-7.73-6c-2.14 1.44-4.89 2.3-8.18 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48Z" />
+                </svg>
+                {isSubmitting ? 'Please wait...' : 'Continue with Google'}
               </button>
-            </form>
+
+              <div className={tw('my-5 text-center text-xs text-[#817970]')}>or continue with email</div>
+
+              <form className={tw('account-form')} onSubmit={handleSubmit}>
+                {activeTab === 'signup' && (
+                  <div className={tw('field')}>
+                    <label htmlFor="account-full-name">Full Name</label>
+                    <input
+                      className={tw('form-control')}
+                      id="account-full-name"
+                      name="fullName"
+                      type="text"
+                      autoComplete="name"
+                      value={formData.fullName}
+                      onChange={handleInputChange}
+                      placeholder="Enter full name"
+                      required
+                    />
+                  </div>
+                )}
+                <div className={tw('field')}>
+                  <label htmlFor="account-email">Email</label>
+                  <input
+                    className={tw('form-control')}
+                    id="account-email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    placeholder="name@example.com"
+                    required
+                  />
+                </div>
+                <div className={tw('field')}>
+                  <label htmlFor="account-password">Password</label>
+                  <input
+                    className={tw('form-control')}
+                    id="account-password"
+                    name="password"
+                    type="password"
+                    autoComplete={activeTab === 'login' ? 'current-password' : 'new-password'}
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    placeholder="At least 6 characters"
+                    minLength={6}
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className={tw('primary-btn full-width justify-center')}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting
+                    ? 'Please wait...'
+                    : activeTab === 'login'
+                      ? 'Login'
+                      : 'Create Account'}
+                </button>
+              </form>
+            </>
           )}
         </div>
 
