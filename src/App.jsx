@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   BrowserRouter,
   Link,
   Route,
   Routes,
   useLocation,
-  useSearchParams,
   useNavigate,
   useParams,
+  useSearchParams,
 } from 'react-router-dom'
 import {
   ArrowRight,
@@ -19,6 +19,7 @@ import {
   ShoppingBag,
   Star,
   Trash2,
+  X,
 } from 'lucide-react'
 import {
   createUserWithEmailAndPassword,
@@ -51,11 +52,90 @@ import StorySection from './components/home/StorySection'
 import TestimonialsSection from './components/home/TestimonialsSection'
 import { formatPrice } from './utils/formatPrice'
 
+/* ------------------------------------------------------------------ */
+/* Constants                                                          */
+/* ------------------------------------------------------------------ */
+
 const PRODUCT_STORAGE_KEY = 'ananyaCatalog'
-const LINEN_SAREE_MIGRATION_KEY = 'ananyaCatalogLinenSareeSeeded'
-const MUNGA_MASHRU_MIGRATION_KEY = 'ananyaCatalogMungaMashruSeeded'
-const LINEN_COTTON_MIGRATION_KEY = 'ananyaCatalogLinenCottonSeeded'
-const NAVY_LINEN_MIGRATION_KEY = 'ananyaCatalogNavyLinenSeeded'
+const CART_STORAGE_KEY = 'sareeCart'
+const WISHLIST_STORAGE_KEY = 'sareeWishlist'
+const ORDERS_STORAGE_KEY = 'ananyaOrders'
+const SEED_PREFIX = 'ananyaCatalog'
+const SEED_PRODUCT_IDS = [
+  'floral-printed-pure-linen-saree',
+  'munga-mashru-pure-silk-saree',
+  'linen-cotton-block-printed-saree',
+  'navy-blue-pure-linen-saree',
+]
+const SERVICEABLE_PINCODES = ['110001', '400001', '560001', '700001', '600001']
+const FALLBACK_IMAGE =
+  'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1200&q=80'
+const SHIPPING_THRESHOLD = 1499
+const SHIPPING_FEE = 199
+const DISCOUNT_RATE = 0.12
+
+const DELIVERY_OPTIONS = [
+  { value: 'Standard Delivery', description: '4-6 business days' },
+  { value: 'Express Delivery', description: 'Faster delivery' },
+  { value: 'Pickup at Store', description: 'Collect from our store' },
+]
+
+const PAYMENT_OPTIONS = [
+  { value: 'Cash on Delivery', description: 'Pay in cash when your order arrives' },
+  { value: 'UPI' },
+  { value: 'Credit/Debit Cards' },
+  { value: 'Net Banking' },
+  { value: 'Wallets' },
+]
+
+const AUTH_ERROR_MESSAGES = {
+  'auth/email-already-in-use': 'This email is already registered. Please log in instead.',
+  'auth/invalid-credential': 'Email or password is incorrect.',
+  'auth/invalid-email': 'Enter a valid email address.',
+  'auth/network-request-failed': 'Network error. Check your connection and try again.',
+  'auth/operation-not-allowed': 'This sign-in method is not enabled in Firebase Console.',
+  'auth/popup-blocked': 'Your browser blocked the Google sign-in popup. Allow popups and try again.',
+  'auth/popup-closed-by-user': 'Google sign-in was cancelled.',
+  'auth/unauthorized-domain': 'Add this website domain to Firebase Authentication authorized domains.',
+  'auth/weak-password': 'Choose a password with at least 6 characters.',
+  'auth/user-disabled': 'This account has been disabled.',
+}
+
+/* ------------------------------------------------------------------ */
+/* Design tokens (Tailwind classes reused across the app)             */
+/* ------------------------------------------------------------------ */
+
+const ui = {
+  page: 'min-h-screen bg-[#f8f5e9] pb-24 text-[#2c1e19] md:pb-0',
+  section: 'w-full px-4 py-8 sm:px-7 sm:py-14',
+  container: 'mx-auto w-full max-w-7xl',
+  card: 'rounded-2xl border border-[#e2d9c5] bg-[#fffdf7] shadow-[0_1px_2px_rgba(44,30,25,0.04)]',
+  cardPad: 'p-5 sm:p-7',
+  eyebrow: 'text-[11px] font-bold uppercase tracking-[0.2em] text-[#81622f]',
+  h1: 'text-3xl font-semibold leading-tight tracking-tight text-[#2c1e19] sm:text-4xl lg:text-5xl',
+  h2: 'text-2xl font-semibold leading-tight tracking-tight text-[#2c1e19] sm:text-3xl',
+  h3: 'text-lg font-semibold text-[#2c1e19]',
+  body: 'text-sm leading-6 text-[#71645b]',
+  muted: 'text-xs text-[#817970]',
+  btnPrimary:
+    'inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#2c1e19] px-5 text-sm font-semibold text-white transition hover:bg-[#49352c] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#b88a3e] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60',
+  btnSecondary:
+    'inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[#2c1e19] px-5 text-sm font-semibold text-[#2c1e19] transition hover:bg-[#eee7d7] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#b88a3e] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60',
+  btnGhost:
+    'inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[#e2d9c5] px-4 text-sm font-semibold text-[#493b32] transition hover:border-[#b88a3e]',
+  input:
+    'w-full rounded-xl border border-[#e2d9c5] bg-white px-3.5 py-3 text-[15px] text-[#2c1e19] outline-none transition placeholder:text-[#a29a8e] focus:border-[#b88a3e] focus:ring-2 focus:ring-[#b88a3e]/20',
+  label: 'mb-1.5 block text-sm font-medium text-[#493b32]',
+  errorText: 'mt-1.5 text-xs text-[#a23b36]',
+  alertError: 'rounded-xl bg-[#f3e7e5] p-3 text-sm text-[#a23b36]',
+  badge: 'inline-flex items-center rounded-full bg-[#eaf7f1] px-3 py-1 text-xs font-semibold text-[#247b5c]',
+  stepBadge:
+    'flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#2c1e19] text-xs font-bold text-white',
+}
+
+/* ------------------------------------------------------------------ */
+/* Helpers                                                            */
+/* ------------------------------------------------------------------ */
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -67,232 +147,288 @@ function ScrollToTop() {
   return null
 }
 
-const utilityClasses = {
-  'section-wrap': 'w-full px-4 py-10 sm:px-7 sm:py-16',
-  container: 'mx-auto w-full max-w-7xl px-4 sm:px-7',
-  'shop-layout': 'grid gap-7 lg:grid-cols-[260px_minmax(0,1fr)]',
-  'shop-sidebar': 'rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-5',
-  'shop-sidebar__header': 'mb-5 flex items-center justify-between',
-  'filter-group': 'mb-5 space-y-2',
-  'filter-label': 'block text-sm font-semibold text-[#493b32]',
-  'search-input': 'flex min-h-11 items-center gap-2 rounded-xl border border-[#ddd4bf] bg-[#fffdf7] px-3 text-[#71645b]',
-  'chip-list': 'flex flex-wrap gap-2',
-  chip: 'rounded-full border border-[#ddd4bf] px-3 py-1.5 text-xs text-[#71645b] transition hover:border-[#b88a3e]',
-  selected: 'border-[#b88a3e] bg-[#b88a3e] text-[#2c1e19]',
-  active: 'border-[#b88a3e] bg-[#b88a3e] text-[#2c1e19]',
-  slider: 'w-full accent-[#b88a3e]',
-  'price-range': 'flex justify-between text-xs text-[#817970]',
-  'shop-content': 'min-w-0',
-  'shop-toolbar': 'mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-[#e2d9c5] pb-4',
-  'shop-toolbar__topline': 'flex items-center gap-4 text-sm text-[#71645b]',
-  'filter-toggle': 'inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#ddd4bf] px-4 font-semibold text-[#2c1e19] lg:hidden',
-  'sort-select-wrap': 'flex items-center gap-2 text-sm text-[#71645b]',
-  'product-grid': 'flex flex-wrap justify-center gap-4 sm:justify-start',
-  'empty-state': 'w-full rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] px-5 py-14 text-center',
-  'large-empty': 'flex min-h-[60vh] flex-col items-center justify-center gap-3',
-  'product-page': 'mx-auto max-w-7xl',
-  breadcrumbs: 'mb-6 flex flex-wrap gap-2 text-sm text-[#817970]',
-  'product-detail-layout': 'grid gap-8 lg:grid-cols-2 lg:gap-12',
-  'product-gallery': 'min-w-0',
-  'product-gallery__main': 'overflow-hidden rounded-[28px] bg-[#eee7d7]',
-  zoomable: 'aspect-[0.8] h-full w-full object-cover',
-  'product-gallery__thumbs': 'mt-3 flex gap-3 overflow-x-auto',
-  thumb: 'h-20 w-16 shrink-0 overflow-hidden rounded-xl border-2 border-transparent object-cover',
-  'product-info': 'min-w-0 py-2',
-  'section-label': 'mb-2 inline-block text-xs font-bold uppercase tracking-[0.18em] text-[#81622f]',
-  'section-title': 'text-3xl font-semibold leading-tight tracking-tight text-[#2c1e19] sm:text-4xl',
-  serif: 'font-serif',
-  'product-title': 'text-3xl font-semibold leading-tight tracking-tight text-[#2c1e19] sm:text-4xl',
-  'rating-row': 'mt-3 flex items-center gap-2 text-sm text-[#71645b]',
-  stars: 'flex items-center gap-1 text-[#b88a3e]',
-  'price-row': 'mt-5 flex flex-wrap items-center gap-3',
-  'current-price': 'text-2xl font-bold text-[#2c1e19]',
-  'old-price': 'text-base text-[#817970] line-through',
-  'discount-tag': 'rounded-full bg-[#eaf7f1] px-3 py-1 text-xs font-semibold text-[#247b5c]',
-  'product-description': 'mt-5 text-base leading-7 text-[#71645b]',
-  'detail-box': 'mt-6 rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-5 text-sm leading-6 text-[#71645b]',
-  'variant-block': 'mt-6',
-  'variant-list': 'mt-3 flex flex-wrap gap-2',
-  'variant-pill': 'rounded-full border border-[#ddd4bf] px-4 py-2 text-sm text-[#71645b]',
-  'purchase-row': 'mt-6 flex flex-wrap items-center gap-3',
-  'quantity-picker': 'inline-flex min-h-12 items-center gap-4 rounded-xl border border-[#ddd4bf] bg-[#fffdf7] px-3',
-  small: 'min-h-9 gap-3 px-2',
-  'primary-btn': 'inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#2c1e19] px-5 font-semibold text-white transition hover:bg-[#49352c]',
-  'secondary-btn': 'inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-[#2c1e19] px-5 font-semibold text-[#2c1e19] transition hover:bg-[#eee7d7]',
-  'full-width': 'w-full',
-  'justify-center': 'justify-center',
-  'action-row': 'mt-4 flex flex-wrap items-center justify-between gap-3',
-  'mini-action': 'inline-flex min-h-10 items-center gap-2 rounded-xl border border-[#ddd4bf] px-4 text-sm font-semibold',
-  'stock-status': 'text-sm font-medium text-[#247b5c]',
-  'pincode-checker': 'mt-6 rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-5',
-  'pincode-input-row': 'mt-2 flex gap-2',
-  'product-tabs': 'mt-10 flex border-b border-[#ddd4bf]',
-  'product-tabs__content': 'py-6',
-  'spec-grid': 'grid gap-3 sm:grid-cols-2',
-  'review-panel': 'grid gap-4 md:grid-cols-2',
-  'review-card': 'rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-5',
-  'review-stars': 'mb-3 flex gap-1 text-[#b88a3e]',
-  'related-section': 'mt-12',
-  'section-header': 'mb-6 flex items-end justify-between gap-4',
-  'cart-layout': 'grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,0.8fr)]',
-  'cart-items-panel': 'rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-5 sm:p-7',
-  'compact-header': 'mb-5',
-  'cart-item': 'flex gap-4 border-t border-[#e2d9c5] py-4',
-  'cart-item__details': 'flex min-w-0 flex-1 flex-col justify-between gap-3',
-  'cart-item__meta': 'flex flex-wrap items-center justify-between gap-3 text-sm text-[#71645b]',
-  'remove-btn': 'inline-flex h-9 w-9 items-center justify-center rounded-full text-[#817970] hover:bg-[#f3e7e5] hover:text-[#a23b36]',
-  'summary-panel': 'rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-5 sm:p-7',
-  'summary-line': 'flex items-center justify-between gap-3 border-b border-[#eee7d7] py-3 text-sm text-[#71645b]',
-  'coupon-box': 'my-4 flex gap-2',
-  'summary-total': 'my-4 flex items-center justify-between text-lg font-bold',
-  'checkout-layout': 'grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(300px,0.8fr)]',
-  'checkout-form': 'space-y-5',
-  'checkout-step': 'rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-5 sm:p-7',
-  'field-grid': 'grid gap-4 sm:grid-cols-2',
-  'two-columns': 'sm:grid-cols-2',
-  field: 'flex min-w-0 flex-col gap-2',
-  'form-control': 'w-full rounded-xl border border-[#ddd4bf] bg-[#fffdf7] px-3 py-2.5 text-sm text-[#2c1e19] outline-none transition placeholder:text-[#a29a8e] focus:border-[#b88a3e] focus:ring-2 focus:ring-[#b88a3e]/15',
-  'full-span': 'sm:col-span-2',
-  'radio-list': 'mt-3 grid gap-3 sm:grid-cols-2',
-  'radio-option': 'flex items-center gap-3 rounded-xl border border-[#ddd4bf] p-4 text-sm',
-  'checkout-summary': 'h-fit lg:sticky lg:top-28',
-  'summary-items': 'space-y-3 border-b border-[#e2d9c5] pb-4',
-  'summary-item': 'flex items-center justify-between gap-3 text-sm',
-  'account-layout': 'grid gap-6 lg:grid-cols-2',
-  'account-card': 'rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-5 sm:p-8',
-  'tab-switcher': 'mb-6 flex border-b border-[#e2d9c5]',
-  'account-form': 'space-y-4',
-  'account-info': 'bg-[#efe7d5]',
-  'admin-layout': 'space-y-6',
-  'admin-header': 'flex flex-wrap items-center justify-between gap-4',
-  'admin-metrics': 'grid grid-cols-2 gap-3 lg:grid-cols-4',
-  'metric-card': 'rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-4',
-  'admin-panels': 'grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)]',
-  'admin-card': 'rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] p-5',
-  'admin-product-list': 'mt-4 space-y-3',
-  'admin-product-item': 'rounded-xl border border-[#e2d9c5] p-4',
-  'admin-product-top': 'flex items-start justify-between gap-3',
-  'admin-product-meta': 'mt-2 flex flex-wrap gap-3 text-xs text-[#817970]',
-  'admin-product-actions': 'mt-3 flex items-center gap-2',
-  'icon-button': 'inline-flex h-10 w-10 items-center justify-center rounded-full text-[#493b32] hover:bg-[#eee7d7]',
+const readStorage = (key, fallback) => {
+  if (typeof window === 'undefined') return fallback
+  try {
+    const raw = window.localStorage.getItem(key)
+    return raw ? JSON.parse(raw) : fallback
+  } catch {
+    return fallback
+  }
 }
 
-function tw(classNames) {
-  return classNames.split(/\s+/).map((name) => utilityClasses[name] || name).join(' ')
+const writeStorage = (key, value) => {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // Storage can be unavailable (private mode or quota). Fail silently.
+  }
 }
 
 const getStoredProducts = () => {
-  if (typeof window === 'undefined') return products
-
-  const saved = window.localStorage.getItem(PRODUCT_STORAGE_KEY)
-  if (!saved) return products
-
-  try {
-    const parsed = JSON.parse(saved)
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : products
-  } catch {
-    return products
-  }
+  const saved = readStorage(PRODUCT_STORAGE_KEY, null)
+  return Array.isArray(saved) && saved.length > 0 ? saved : products
 }
 
+const getAuthErrorMessage = (error) =>
+  AUTH_ERROR_MESSAGES[error?.code] || 'Unable to authenticate. Please try again.'
+
+const getAddressKey = (address) =>
+  [address.street, address.city, address.state, address.zip, address.country]
+    .map((value) => String(value || '').trim().toLowerCase())
+    .join('|')
+
+const googleProvider = new GoogleAuthProvider()
+
+/* ------------------------------------------------------------------ */
+/* Firestore services                                                 */
+/* ------------------------------------------------------------------ */
+
+const saveUserProfile = async (firebaseUser) => {
+  const userRef = doc(db, 'users', firebaseUser.uid)
+  const snapshot = await getDoc(userRef)
+  const existing = snapshot.exists() ? snapshot.data() : {}
+
+  await setDoc(
+    userRef,
+    {
+      uid: firebaseUser.uid,
+      name:
+        firebaseUser.displayName ||
+        existing.name ||
+        firebaseUser.email?.split('@')[0] ||
+        'Customer',
+      email: firebaseUser.email || existing.email || null,
+      ...(firebaseUser.photoURL ? { photoURL: firebaseUser.photoURL } : {}),
+      ...(!snapshot.exists() ? { role: 'customer', createdAt: serverTimestamp() } : {}),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
+}
+
+const saveCheckoutAddress = async (firebaseUser, formData) => {
+  const userRef = doc(db, 'users', firebaseUser.uid)
+  const snapshot = await getDoc(userRef)
+  const profile = snapshot.exists() ? snapshot.data() : {}
+  const addresses = Array.isArray(profile.addresses)
+    ? profile.addresses.filter((address) => address && typeof address === 'object')
+    : []
+
+  const address = {
+    street: formData.address.trim(),
+    city: formData.city.trim(),
+    state: formData.state.trim(),
+    zip: formData.pincode.trim(),
+    country: formData.country.trim() || 'India',
+  }
+
+  const matchIndex = addresses.findIndex(
+    (saved) => getAddressKey(saved) === getAddressKey(address),
+  )
+  const hasDefault = addresses.some((saved) => saved.isDefault === true)
+  const makeDefault = !hasDefault
+  let nextAddresses
+
+  if (matchIndex >= 0) {
+    nextAddresses = addresses.map((saved, index) =>
+      index === matchIndex && makeDefault ? { ...saved, isDefault: true } : saved,
+    )
+  } else {
+    nextAddresses = [
+      ...addresses.map((saved) => (makeDefault ? { ...saved, isDefault: false } : saved)),
+      {
+        id: `addr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        ...address,
+        isDefault: makeDefault,
+        createdAt: new Date().toISOString(),
+      },
+    ]
+  }
+
+  await setDoc(
+    userRef,
+    {
+      uid: firebaseUser.uid,
+      name:
+        formData.fullName.trim() ||
+        firebaseUser.displayName ||
+        profile.name ||
+        firebaseUser.email?.split('@')[0] ||
+        'Customer',
+      email: formData.email.trim() || firebaseUser.email || profile.email || null,
+      ...(formData.mobile.trim() ? { phone: formData.mobile.trim() } : {}),
+      addresses: nextAddresses,
+      ...(!snapshot.exists() ? { role: 'customer', createdAt: serverTimestamp() } : {}),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  )
+}
+
+const saveOrderToFirestore = async (firebaseUser, order) => {
+  await setDoc(doc(db, 'orders', order.id), {
+    ...order,
+    uid: firebaseUser.uid,
+    createdAt: serverTimestamp(),
+  })
+}
+
+/* ------------------------------------------------------------------ */
+/* Small UI primitives                                                */
+/* ------------------------------------------------------------------ */
+
+function Field({ label, error, className = '', children }) {
+  return (
+    <div className={`flex min-w-0 flex-col ${className}`}>
+      <label className={ui.label}>{label}</label>
+      {children}
+      {error && <p className={ui.errorText}>{error}</p>}
+    </div>
+  )
+}
+
+function StepHeader({ step, title, subtitle }) {
+  return (
+    <div className="mb-5">
+      <div className="flex items-center gap-3">
+        <span className={ui.stepBadge}>{step}</span>
+        <h3 className={ui.h3}>{title}</h3>
+      </div>
+      {subtitle && <p className={`mt-2 pl-10 ${ui.body}`}>{subtitle}</p>}
+    </div>
+  )
+}
+
+function OptionCard({ name, value, description, checked, onChange }) {
+  return (
+    <label
+      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition ${
+        checked
+          ? 'border-[#b88a3e] bg-[#fbf6ea] ring-1 ring-[#b88a3e]'
+          : 'border-[#e2d9c5] bg-white hover:border-[#b88a3e]/60'
+      }`}
+    >
+      <input
+        type="radio"
+        name={name}
+        value={value}
+        checked={checked}
+        onChange={onChange}
+        className="mt-0.5 h-4 w-4 shrink-0 accent-[#b88a3e]"
+      />
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-[#2c1e19]">{value}</span>
+        {description && <span className="mt-0.5 block text-xs text-[#71645b]">{description}</span>}
+      </span>
+    </label>
+  )
+}
+
+function SectionHeading({ eyebrow, title, action }) {
+  return (
+    <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <div>
+        {eyebrow && <span className={ui.eyebrow}>{eyebrow}</span>}
+        <h2 className={`mt-2 ${ui.h2}`}>{title}</h2>
+      </div>
+      {action}
+    </div>
+  )
+}
+
+function EmptyState({ icon: Icon, title, description, actionLabel = 'Explore Sarees', actionTo = '/shop' }) {
+  return (
+    <section className={ui.section}>
+      <div className={`${ui.container} flex justify-center`}>
+        <div className={`${ui.card} flex w-full max-w-lg flex-col items-center gap-3 px-6 py-14 text-center sm:py-20`}>
+          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#eee7d7] text-[#81622f]">
+            <Icon size={28} strokeWidth={1.6} />
+          </span>
+          <h2 className={ui.h2}>{title}</h2>
+          <p className={`max-w-sm ${ui.body}`}>{description}</p>
+          <Link to={actionTo} className={`${ui.btnPrimary} mt-4`}>
+            {actionLabel}
+            <ArrowRight size={18} />
+          </Link>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* App shell                                                          */
+/* ------------------------------------------------------------------ */
+
 function App() {
-  const [cart, setCart] = useState(() => {
-    if (typeof window === 'undefined') return []
-    const saved = window.localStorage.getItem('sareeCart')
-    return saved ? JSON.parse(saved) : []
-  })
-
-  const [wishlist, setWishlist] = useState(() => {
-    if (typeof window === 'undefined') return []
-    const saved = window.localStorage.getItem('sareeWishlist')
-    return saved ? JSON.parse(saved) : []
-  })
-
+  const [cart, setCart] = useState(() => readStorage(CART_STORAGE_KEY, []))
+  const [wishlist, setWishlist] = useState(() => readStorage(WISHLIST_STORAGE_KEY, []))
   const [catalog, setCatalog] = useState(getStoredProducts)
+  const [firebaseUser, setFirebaseUser] = useState(auth.currentUser)
+  const [authReady, setAuthReady] = useState(Boolean(auth.currentUser))
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false)
+  const [loginMode, setLoginMode] = useState('login')
+  const [loginForm, setLoginForm] = useState({ fullName: '', email: '', password: '' })
+  const [loginError, setLoginError] = useState('')
+  const [isAuthenticating, setIsAuthenticating] = useState(false)
+  const openLoginPrompt = useCallback(() => setShowLoginPrompt(true), [])
 
-  useEffect(() => {
-    window.localStorage.setItem('sareeCart', JSON.stringify(cart))
-  }, [cart])
+  useEffect(() => writeStorage(CART_STORAGE_KEY, cart), [cart])
+  useEffect(() => writeStorage(WISHLIST_STORAGE_KEY, wishlist), [wishlist])
+  useEffect(() => writeStorage(PRODUCT_STORAGE_KEY, catalog), [catalog])
 
-  useEffect(() => {
-    window.localStorage.setItem('sareeWishlist', JSON.stringify(wishlist))
-  }, [wishlist])
-
-  useEffect(() => {
-    if (window.localStorage.getItem(LINEN_SAREE_MIGRATION_KEY) === 'true') return
-
-    const linenSaree = products.find((product) => product.id === 'floral-printed-pure-linen-saree')
-    if (linenSaree) {
-      setCatalog((current) => current.some((product) => product.id === linenSaree.id)
-        ? current
-        : [linenSaree, ...current])
+  useEffect(() => onAuthStateChanged(auth, (currentUser) => {
+    setFirebaseUser(currentUser)
+    setAuthReady(true)
+    if (currentUser) {
+      setShowLoginPrompt(false)
     }
-    window.localStorage.setItem(LINEN_SAREE_MIGRATION_KEY, 'true')
-  }, [])
+  }), [])
 
   useEffect(() => {
-    if (window.localStorage.getItem(MUNGA_MASHRU_MIGRATION_KEY) === 'true') return
+    if (!showLoginPrompt) return undefined
 
-    const mungaMashruSaree = products.find((product) => product.id === 'munga-mashru-pure-silk-saree')
-    if (mungaMashruSaree) {
-      setCatalog((current) => current.some((product) => product.id === mungaMashruSaree.id)
-        ? current
-        : [mungaMashruSaree, ...current])
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setShowLoginPrompt(false)
     }
-    window.localStorage.setItem(MUNGA_MASHRU_MIGRATION_KEY, 'true')
-  }, [])
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [showLoginPrompt])
 
+  // One-time seeding of newer catalog items for returning visitors.
   useEffect(() => {
-    if (window.localStorage.getItem(LINEN_COTTON_MIGRATION_KEY) === 'true') return
+    SEED_PRODUCT_IDS.forEach((productId) => {
+      const flagKey = `${SEED_PREFIX}${productId}Seeded`
+      if (window.localStorage.getItem(flagKey) === 'true') return
 
-    const linenCottonSaree = products.find((product) => product.id === 'linen-cotton-block-printed-saree')
-    if (linenCottonSaree) {
-      setCatalog((current) => current.some((product) => product.id === linenCottonSaree.id)
-        ? current
-        : [linenCottonSaree, ...current])
-    }
-    window.localStorage.setItem(LINEN_COTTON_MIGRATION_KEY, 'true')
+      const seedProduct = products.find((product) => product.id === productId)
+      if (seedProduct) {
+        setCatalog((current) =>
+          current.some((product) => product.id === productId) ? current : [seedProduct, ...current],
+        )
+      }
+      window.localStorage.setItem(flagKey, 'true')
+    })
   }, [])
-
-  useEffect(() => {
-    if (window.localStorage.getItem(NAVY_LINEN_MIGRATION_KEY) === 'true') return
-
-    const navyLinenSaree = products.find((product) => product.id === 'navy-blue-pure-linen-saree')
-    if (navyLinenSaree) {
-      setCatalog((current) => current.some((product) => product.id === navyLinenSaree.id)
-        ? current
-        : [navyLinenSaree, ...current])
-    }
-    window.localStorage.setItem(NAVY_LINEN_MIGRATION_KEY, 'true')
-  }, [])
-
-  useEffect(() => {
-    window.localStorage.setItem(PRODUCT_STORAGE_KEY, JSON.stringify(catalog))
-  }, [catalog])
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
 
-  const handleAddProduct = (product) => {
-    setCatalog((current) => [product, ...current])
-  }
+  const handleAddProduct = (product) => setCatalog((current) => [product, ...current])
 
-  const handleUpdateProduct = (productId, updatedProduct) => {
+  const handleUpdateProduct = (productId, updatedProduct) =>
     setCatalog((current) =>
       current.map((item) => (item.id === productId ? { ...item, ...updatedProduct } : item)),
     )
-  }
 
-  const handleDeleteProduct = (productId) => {
+  const handleDeleteProduct = (productId) =>
     setCatalog((current) => current.filter((item) => item.id !== productId))
-  }
 
   const addToCart = (product, quantity = 1, variant = product.colors?.[0] ?? 'Classic') => {
     if (!product || product.stock < 1) return
 
     setCart((current) => {
-      const existing = current.find(
-        (item) => item.id === product.id && item.variant === variant,
-      )
+      const existing = current.find((item) => item.id === product.id && item.variant === variant)
 
       if (existing) {
         return current.map((item) =>
@@ -316,7 +452,44 @@ function App() {
     })
   }
 
-  const updateQuantity = (productId, variant, delta) => {
+  const handleLoginPromptSubmit = async (event) => {
+    event.preventDefault()
+    setLoginError('')
+    setIsAuthenticating(true)
+
+    try {
+      if (loginMode === 'signup') {
+        const credential = await createUserWithEmailAndPassword(
+          auth,
+          loginForm.email.trim(),
+          loginForm.password,
+        )
+        if (loginForm.fullName.trim()) {
+          await updateProfile(credential.user, { displayName: loginForm.fullName.trim() })
+        }
+      } else {
+        await signInWithEmailAndPassword(auth, loginForm.email.trim(), loginForm.password)
+      }
+    } catch (error) {
+      setLoginError(getAuthErrorMessage(error))
+    } finally {
+      setIsAuthenticating(false)
+    }
+  }
+
+  const handleLoginPromptGoogleSignIn = async () => {
+    setLoginError('')
+    setIsAuthenticating(true)
+    try {
+      await signInWithPopup(auth, googleProvider)
+    } catch (error) {
+      setLoginError(getAuthErrorMessage(error))
+    } finally {
+      setIsAuthenticating(false)
+    }
+  }
+
+  const updateQuantity = (productId, variant, delta) =>
     setCart((current) =>
       current.flatMap((item) => {
         if (item.id !== productId || item.variant !== variant) return [item]
@@ -324,31 +497,27 @@ function App() {
         return nextQuantity <= 0 ? [] : [{ ...item, quantity: nextQuantity }]
       }),
     )
-  }
 
-  const removeFromCart = (productId, variant) => {
+  const removeFromCart = (productId, variant) =>
     setCart((current) =>
       current.filter((item) => !(item.id === productId && item.variant === variant)),
     )
-  }
 
-  const toggleWishlist = (productId) => {
+  const toggleWishlist = (productId) =>
     setWishlist((current) =>
       current.includes(productId)
         ? current.filter((id) => id !== productId)
         : [...current, productId],
     )
-  }
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
-  const shipping = subtotal > 1499 ? 0 : cart.length ? 199 : 0
-  const discount = subtotal * 0.12
-  const total = Math.max(subtotal - discount + shipping, 0)
+  const shipping = subtotal > SHIPPING_THRESHOLD ? 0 : cart.length ? SHIPPING_FEE : 0
+  const discount = subtotal * DISCOUNT_RATE
 
   return (
     <BrowserRouter>
       <ScrollToTop />
-      <div className={tw('min-h-screen bg-[#f8f5e9] pb-20 text-[#2c1e19] md:pb-0')}>
+      <div className={ui.page}>
         <Header cartCount={cartCount} wishlist={wishlist} />
         <main>
           <Routes>
@@ -409,7 +578,22 @@ function App() {
             />
             <Route
               path="/checkout"
-              element={<CheckoutPage cart={cart} total={total} shipping={shipping} />}
+              element={
+                firebaseUser ? (
+                  <CheckoutPage
+                    cart={cart}
+                    subtotal={subtotal}
+                    shipping={shipping}
+                    discount={discount}
+                    onOrderPlaced={() => setCart([])}
+                  />
+                ) : (
+                  <CheckoutLoginGate
+                    authReady={authReady}
+                    onOpenLogin={openLoginPrompt}
+                  />
+                )
+              }
             />
             <Route path="/account" element={<AccountPage />} />
             <Route
@@ -429,10 +613,176 @@ function App() {
         <Footer />
         <SupportBubble />
         <MobileBottomNav cartCount={cartCount} wishlistCount={wishlist.length} />
+        {showLoginPrompt && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-[#2c1e19]/55 px-4 py-6">
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="cart-login-title"
+              className="relative my-auto w-full max-w-md rounded-2xl border border-[#e2d9c5] bg-[#fffdf7] p-6 shadow-2xl sm:p-8"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLoginPrompt(false)
+                  setLoginError('')
+                }}
+                aria-label="Close login prompt"
+                className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-[#71645b] transition hover:bg-[#eee7d7]"
+              >
+                <X size={20} />
+              </button>
+              <span className={ui.eyebrow}>Secure checkout</span>
+              <h2 id="cart-login-title" className={`mt-2 ${ui.h2}`}>
+                {loginMode === 'login' ? 'Login to continue' : 'Create your account'}
+              </h2>
+              <p className={`mt-2 ${ui.body}`}>
+                Sign in or create an account to continue with your order.
+              </p>
+
+              <div role="tablist" className="mt-5 flex gap-1 border-b border-[#e2d9c5]">
+                {[
+                  { id: 'login', label: 'Login' },
+                  { id: 'signup', label: 'Sign up' },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    role="tab"
+                    aria-selected={loginMode === tab.id}
+                    type="button"
+                    onClick={() => {
+                      setLoginMode(tab.id)
+                      setLoginError('')
+                    }}
+                    className={`border-b-2 px-4 py-3 text-sm font-semibold transition ${
+                      loginMode === tab.id
+                        ? 'border-[#b88a3e] text-[#2c1e19]'
+                        : 'border-transparent text-[#817970] hover:text-[#2c1e19]'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {loginError && <p role="alert" className={`mt-4 ${ui.alertError}`}>{loginError}</p>}
+
+              <button
+                type="button"
+                onClick={handleLoginPromptGoogleSignIn}
+                disabled={isAuthenticating}
+                className={`${ui.btnSecondary} mt-4 w-full`}
+              >
+                <GoogleIcon />
+                {isAuthenticating ? 'Please wait…' : 'Continue with Google'}
+              </button>
+
+              <div className="my-4 flex items-center gap-3 text-xs text-[#817970]">
+                <span className="h-px flex-1 bg-[#e2d9c5]" />
+                or continue with email
+                <span className="h-px flex-1 bg-[#e2d9c5]" />
+              </div>
+
+              <form className="space-y-4" onSubmit={handleLoginPromptSubmit}>
+                {loginMode === 'signup' && (
+                  <label className="flex flex-col gap-1.5">
+                    <span className={ui.label}>Full name</span>
+                    <input
+                      className={ui.input}
+                      name="fullName"
+                      autoComplete="name"
+                      value={loginForm.fullName}
+                      onChange={(event) =>
+                        setLoginForm((current) => ({ ...current, fullName: event.target.value }))
+                      }
+                      required
+                    />
+                  </label>
+                )}
+                <label className="flex flex-col gap-1.5">
+                  <span className={ui.label}>Email</span>
+                  <input
+                    className={ui.input}
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    value={loginForm.email}
+                    onChange={(event) =>
+                      setLoginForm((current) => ({ ...current, email: event.target.value }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className={ui.label}>Password</span>
+                  <input
+                    className={ui.input}
+                    name="password"
+                    type="password"
+                    autoComplete={loginMode === 'login' ? 'current-password' : 'new-password'}
+                    minLength={6}
+                    value={loginForm.password}
+                    onChange={(event) =>
+                      setLoginForm((current) => ({ ...current, password: event.target.value }))
+                    }
+                    required
+                  />
+                </label>
+                <button type="submit" disabled={isAuthenticating} className={`${ui.btnPrimary} w-full`}>
+                  {isAuthenticating
+                    ? 'Please wait…'
+                    : loginMode === 'login'
+                      ? 'Login and continue'
+                      : 'Create account and continue'}
+                </button>
+              </form>
+
+              <Link
+                to="/cart"
+                onClick={() => setShowLoginPrompt(false)}
+                className={`${ui.btnGhost} mt-3 w-full`}
+              >
+                Back to cart
+              </Link>
+            </section>
+          </div>
+        )}
       </div>
     </BrowserRouter>
   )
 }
+
+function CheckoutLoginGate({ authReady, onOpenLogin }) {
+  useEffect(() => {
+    if (authReady) onOpenLogin()
+  }, [authReady, onOpenLogin])
+
+  return (
+    <section className={ui.section}>
+      <div className={`${ui.card} mx-auto max-w-xl p-6 text-center sm:p-10`}>
+        <span className={ui.eyebrow}>Secure checkout</span>
+        <h1 className={`mt-2 ${ui.h2}`}>Login to continue</h1>
+        <p className={`mt-3 ${ui.body}`}>
+          Please log in or create an account before placing your order.
+        </p>
+        {authReady ? (
+          <button type="button" onClick={onOpenLogin} className={`${ui.btnPrimary} mt-6 w-full`}>
+            Login / Sign up
+          </button>
+        ) : (
+          <p role="status" className="mt-6 text-sm text-[#71645b]">Checking your account…</p>
+        )}
+        <Link to="/cart" className={`${ui.btnGhost} mt-3 w-full`}>
+          Back to cart
+        </Link>
+      </div>
+    </section>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Home                                                               */
+/* ------------------------------------------------------------------ */
 
 function HomePage({ addToCart, toggleWishlist, wishlist, products }) {
   const featuredProducts = products.slice(0, 4)
@@ -462,30 +812,45 @@ function HomePage({ addToCart, toggleWishlist, wishlist, products }) {
   )
 }
 
+/* ------------------------------------------------------------------ */
+/* Wishlist                                                           */
+/* ------------------------------------------------------------------ */
+
 function WishlistPage({ products, toggleWishlist }) {
   return (
-    <section className={tw('mx-auto min-h-[70vh] max-w-7xl px-4 py-10 sm:px-7 sm:py-16')}>
-      <div className={tw('mb-8')}>
-        <span className={tw('text-xs font-bold uppercase tracking-[0.18em] text-[#81622f]')}>Your saved pieces</span>
-        <h1 className={tw('mt-2 text-4xl font-semibold tracking-tight text-[#2c1e19] sm:text-5xl')}>Wishlist</h1>
+    <section className={ui.section}>
+      <div className={ui.container}>
+        <div className="mb-8">
+          <span className={ui.eyebrow}>Your saved pieces</span>
+          <h1 className={`mt-2 ${ui.h1}`}>Wishlist</h1>
+        </div>
+
+        {products.length ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5 lg:grid-cols-4">
+            {products.map((product) => (
+              <WishlistProductCard key={product.id} product={product} toggleWishlist={toggleWishlist} />
+            ))}
+          </div>
+        ) : (
+          <div className={`${ui.card} flex flex-col items-center gap-3 px-6 py-14 text-center sm:py-20`}>
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#f5e9ec] text-[#b98791]">
+              <Heart size={28} strokeWidth={1.6} />
+            </span>
+            <h2 className={ui.h2}>Your wishlist is waiting</h2>
+            <p className={`max-w-sm ${ui.body}`}>Save the sarees you love and find them here later.</p>
+            <Link to="/shop" className={`${ui.btnPrimary} mt-4`}>
+              Explore sarees
+            </Link>
+          </div>
+        )}
       </div>
-      {products.length ? (
-        <div className={tw('grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4')}>
-          {products.map((product) => (
-            <WishlistProductCard key={product.id} product={product} toggleWishlist={toggleWishlist} />
-          ))}
-        </div>
-      ) : (
-        <div className={tw('rounded-[28px] border border-[#ddd4bf] bg-[#fffdf7] px-6 py-14 text-center sm:py-20')}>
-          <Heart className={tw('mx-auto text-[#b98791]')} size={40} strokeWidth={1.6} />
-          <h2 className={tw('mt-4 text-2xl font-semibold text-[#2c1e19]')}>Your wishlist is waiting</h2>
-          <p className={tw('mt-2 text-[#71645b]')}>Save the sarees you love and find them here later.</p>
-          <Link to="/shop" className={tw('mt-6 inline-flex min-h-12 items-center justify-center rounded-2xl bg-[#2c1e19] px-6 font-semibold text-white')}>Explore sarees</Link>
-        </div>
-      )}
     </section>
   )
 }
+
+/* ------------------------------------------------------------------ */
+/* Shop                                                               */
+/* ------------------------------------------------------------------ */
 
 function ShopPage({ addToCart, toggleWishlist, wishlist, products }) {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -511,11 +876,15 @@ function ShopPage({ addToCart, toggleWishlist, wishlist, products }) {
 
     return [...products]
       .filter((product) => {
-        const matchesSearch = !query ||
+        const matchesSearch =
+          !query ||
           product.name.toLowerCase().includes(query) ||
           product.category.toLowerCase().includes(query) ||
           product.fabric.toLowerCase().includes(query)
-        const matchesCategory = productCategory === 'All' || productCategory === 'Sale' || product.category === productCategory
+        const matchesCategory =
+          productCategory === 'All' ||
+          productCategory === 'Sale' ||
+          product.category === productCategory
         const matchesSale = productCategory !== 'Sale' || product.discount > 0
         const matchesPrice = product.discountedPrice <= maxPrice
         return matchesSearch && matchesCategory && matchesSale && matchesPrice
@@ -541,13 +910,54 @@ function ShopPage({ addToCart, toggleWishlist, wishlist, products }) {
     />
   )
 }
+
+/* ------------------------------------------------------------------ */
+/* Product detail                                                     */
+/* ------------------------------------------------------------------ */
+
 function ProductPage({ addToCart, toggleWishlist, wishlist, products }) {
   const { id } = useParams()
   const product = products.find((item) => item.id === id)
 
   if (!product) return <NotFound />
 
-  return <ProductDetail key={product.id} product={product} toggleWishlist={toggleWishlist} wishlist={wishlist} addToCart={addToCart} products={products} />
+  return (
+    <ProductDetail
+      key={product.id}
+      product={product}
+      products={products}
+      addToCart={addToCart}
+      toggleWishlist={toggleWishlist}
+      wishlist={wishlist}
+    />
+  )
+}
+
+const REVIEWS = [
+  {
+    quote: 'The drape and finish are stunning. It felt premium from the moment I unboxed it.',
+    author: 'Ankita S.',
+  },
+  {
+    quote: 'Beautiful zari work and an elegant silhouette. It is perfect for festive occasions.',
+    author: 'Neha R.',
+  },
+]
+
+function Stars({ rating, size = 14 }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {[...Array(5)].map((_, index) => (
+        <Star
+          key={index}
+          size={size}
+          fill={index < Math.round(rating) ? '#d6ae55' : '#e5e0d2'}
+          strokeWidth={1.5}
+          className={index < Math.round(rating) ? 'text-[#d6ae55]' : 'text-[#e5e0d2]'}
+        />
+      ))}
+    </div>
+  )
 }
 
 function ProductDetail({ addToCart, toggleWishlist, wishlist, products, product }) {
@@ -556,203 +966,280 @@ function ProductDetail({ addToCart, toggleWishlist, wishlist, products, product 
   const [selectedVariant, setSelectedVariant] = useState(product.colors[0] || 'Classic')
   const [quantity, setQuantity] = useState(1)
   const [pincode, setPincode] = useState('')
-  const [deliveryStatus, setDeliveryStatus] = useState('')
+  const [deliveryStatus, setDeliveryStatus] = useState(null)
+  const [activeTab, setActiveTab] = useState('description')
+
+  const isWishlisted = wishlist.includes(product.id)
+  const inStock = product.stock > 0
   const recentProducts = products.filter((item) => item.id !== product.id).slice(0, 4)
 
   const handlePincodeCheck = () => {
-    if (pincode.trim().length !== 6) {
-      setDeliveryStatus('Enter a valid 6-digit PIN code.')
+    const code = pincode.trim()
+    if (!/^\d{6}$/.test(code)) {
+      setDeliveryStatus({ ok: false, text: 'Enter a valid 6-digit PIN code.' })
       return
     }
-    const available = ['110001', '400001', '560001', '700001', '600001']
     setDeliveryStatus(
-      available.includes(pincode.trim())
-        ? 'Delivery available in 4-6 business days.'
-        : 'This PIN code is currently unavailable for delivery.',
+      SERVICEABLE_PINCODES.includes(code)
+        ? { ok: true, text: 'Delivery available in 4-6 business days.' }
+        : { ok: false, text: 'This PIN code is currently unavailable for delivery.' },
     )
   }
 
+  const specs = [
+    { label: 'Fabric', value: product.material },
+    { label: 'Saree length', value: product.length },
+    { label: 'Blouse', value: product.blouse },
+    { label: 'Care', value: product.care },
+    { label: 'Availability', value: inStock ? 'Ready to ship' : 'Pre-order' },
+  ]
+
+  const tabs = [
+    { id: 'description', label: 'Description' },
+    { id: 'specifications', label: 'Specifications' },
+    { id: 'reviews', label: 'Reviews' },
+  ]
+
   return (
-    <section className={tw('section-wrap product-page')}>
-      <div className={tw('container')}>
-        <div className={tw('breadcrumbs')}>
-          <Link to="/">Home</Link>
+    <section className={ui.section}>
+      <div className={ui.container}>
+        <nav aria-label="Breadcrumb" className="mb-6 flex flex-wrap items-center gap-2 text-sm text-[#817970]">
+          <Link to="/" className="hover:text-[#2c1e19]">Home</Link>
           <span>/</span>
-          <Link to="/shop">Shop</Link>
+          <Link to="/shop" className="hover:text-[#2c1e19]">Shop</Link>
           <span>/</span>
-          <span>{product.name}</span>
-        </div>
+          <span className="truncate text-[#2c1e19]">{product.name}</span>
+        </nav>
 
-        <div className={tw('product-detail-layout')}>
-          <div className={tw('product-gallery')}>
-            <div className={tw('product-gallery__main')}>
-              <ImageWithFallback src={selectedImage} alt={product.name} className={tw('zoomable')} />
+        <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
+          {/* Gallery */}
+          <div className="min-w-0">
+            <div className="aspect-[4/5] overflow-hidden rounded-3xl bg-[#eee7d7]">
+              <ImageWithFallback src={selectedImage} alt={product.name} className="h-full w-full object-cover" />
             </div>
-            <div className={tw('product-gallery__thumbs')}>
-              {product.images.map((image) => (
-                <button
-                  key={image}
-                  type="button"
-                  className={tw(`thumb ${selectedImage === image ? 'selected' : ''}`)}
-                  onClick={() => setSelectedImage(image)}
-                >
-                  <ImageWithFallback src={image} alt={product.name} className="h-full w-full rounded-xl object-cover" />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className={tw('product-info')}>
-            <span className={tw('section-label')}>{product.category}</span>
-            <h1 className={tw('serif product-title')}>{product.name}</h1>
-            <div className={tw('rating-row')}>
-              <div className={tw('stars')}>
-                {[...Array(5)].map((_, index) => (
-                  <Star key={index} size={14} fill={index < Math.round(product.rating) ? '#d6ae55' : '#dfe2e8'} strokeWidth={1.5} />
+            {product.images.length > 1 && (
+              <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
+                {product.images.map((image) => (
+                  <button
+                    key={image}
+                    type="button"
+                    onClick={() => setSelectedImage(image)}
+                    aria-label="View image"
+                    className={`h-20 w-16 shrink-0 overflow-hidden rounded-xl border-2 transition ${
+                      selectedImage === image ? 'border-[#b88a3e]' : 'border-transparent'
+                    }`}
+                  >
+                    <ImageWithFallback src={image} alt={product.name} className="h-full w-full object-cover" />
+                  </button>
                 ))}
               </div>
+            )}
+          </div>
+
+          {/* Info */}
+          <div className="min-w-0 lg:py-2">
+            <span className={ui.eyebrow}>{product.category}</span>
+            <h1 className="mt-2 font-serif text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
+              {product.name}
+            </h1>
+
+            <div className="mt-3 flex items-center gap-2 text-sm text-[#71645b]">
+              <Stars rating={product.rating} />
               <span>{product.rating} ({product.reviews} reviews)</span>
             </div>
 
-            <div className={tw('price-row')}>
-              <span className={tw('current-price')}>{formatPrice(product.discountedPrice)}</span>
+            <div className="mt-5 flex flex-wrap items-baseline gap-3">
+              <span className="text-3xl font-bold text-[#2c1e19]">{formatPrice(product.discountedPrice)}</span>
               {product.discount > 0 && (
                 <>
-                  <span className={tw('old-price')}>{formatPrice(product.price)}</span>
-                  <span className={tw('discount-tag')}>{product.discount}% Off</span>
+                  <span className="text-base text-[#817970] line-through">{formatPrice(product.price)}</span>
+                  <span className={ui.badge}>{product.discount}% off</span>
                 </>
               )}
             </div>
 
-            <p className={tw('product-description')}>{product.description}</p>
+            <p className="mt-5 text-base leading-7 text-[#71645b]">{product.description}</p>
 
-            <div className={tw('detail-box')}>
-              <div>
-                <span>Fabric</span>
-                <strong>{product.material}</strong>
-              </div>
-              <div>
-                <span>Saree Length</span>
-                <strong>{product.length}</strong>
-              </div>
-              <div>
-                <span>Blouse</span>
-                <strong>{product.blouse}</strong>
-              </div>
-            </div>
+            <dl className="mt-6 grid grid-cols-3 divide-x divide-[#e2d9c5] overflow-hidden rounded-2xl border border-[#e2d9c5] bg-[#fffdf7]">
+              {[
+                { label: 'Fabric', value: product.material },
+                { label: 'Length', value: product.length },
+                { label: 'Blouse', value: product.blouse },
+              ].map((item) => (
+                <div key={item.label} className="p-4">
+                  <dt className="text-xs text-[#817970]">{item.label}</dt>
+                  <dd className="mt-1 text-sm font-semibold text-[#2c1e19]">{item.value}</dd>
+                </div>
+              ))}
+            </dl>
 
-            <div className={tw('variant-block')}>
-              <span>Available Colors</span>
-              <div className={tw('variant-list')}>
-                {product.colors.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    className={tw(`variant-pill ${selectedVariant === color ? 'selected' : ''}`)}
-                    onClick={() => setSelectedVariant(color)}
-                  >
-                    {color}
-                  </button>
-                ))}
+            {product.colors.length > 0 && (
+              <div className="mt-6">
+                <span className="text-sm font-medium text-[#493b32]">Color</span>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {product.colors.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setSelectedVariant(color)}
+                      aria-pressed={selectedVariant === color}
+                      className={`rounded-full border px-4 py-2 text-sm transition ${
+                        selectedVariant === color
+                          ? 'border-[#b88a3e] bg-[#b88a3e] text-[#2c1e19]'
+                          : 'border-[#e2d9c5] text-[#71645b] hover:border-[#b88a3e]'
+                      }`}
+                    >
+                      {color}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
-            <div className={tw('purchase-row')}>
-              <div className={tw('quantity-picker')}>
-                <button type="button" onClick={() => setQuantity((current) => Math.max(1, current - 1))}>
+            {/* Purchase */}
+            <div className="mt-7 flex flex-wrap items-center gap-3">
+              <div className="inline-flex min-h-12 items-center gap-4 rounded-xl border border-[#e2d9c5] bg-white px-3">
+                <button
+                  type="button"
+                  aria-label="Decrease quantity"
+                  onClick={() => setQuantity((current) => Math.max(1, current - 1))}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-[#493b32] hover:bg-[#eee7d7]"
+                >
                   <Minus size={16} />
                 </button>
-                <span>{quantity}</span>
-                <button type="button" onClick={() => setQuantity((current) => Math.min(product.stock, current + 1))}>
+                <span className="w-6 text-center font-semibold">{quantity}</span>
+                <button
+                  type="button"
+                  aria-label="Increase quantity"
+                  onClick={() => setQuantity((current) => Math.min(product.stock, current + 1))}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-[#493b32] hover:bg-[#eee7d7]"
+                >
                   <Plus size={16} />
                 </button>
               </div>
-              <button type="button" className={tw('primary-btn full-width')} onClick={() => addToCart(product, quantity, selectedVariant)}>
-                Add to Cart
+
+              <button
+                type="button"
+                disabled={!inStock}
+                onClick={() => addToCart(product, quantity, selectedVariant)}
+                className={`${ui.btnPrimary} flex-1`}
+              >
+                Add to cart
               </button>
-              <button type="button" className={tw('secondary-btn')} onClick={() => { addToCart(product, quantity, selectedVariant); navigate('/checkout'); }}>
-                Buy Now
+              <button
+                type="button"
+                disabled={!inStock}
+                onClick={() => {
+                  addToCart(product, quantity, selectedVariant)
+                  navigate('/checkout')
+                }}
+                className={`${ui.btnSecondary} flex-1`}
+              >
+                Buy now
               </button>
             </div>
 
-            <div className={tw('action-row')}>
-              <button type="button" className={tw('mini-action')} onClick={() => toggleWishlist(product.id)}>
-                <Heart size={16} fill={wishlist.includes(product.id) ? '#651F32' : 'none'} />
-                {wishlist.includes(product.id) ? 'Saved' : 'Wishlist'}
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => toggleWishlist(product.id)}
+                aria-pressed={isWishlisted}
+                className={ui.btnGhost}
+              >
+                <Heart size={16} fill={isWishlisted ? '#651F32' : 'none'} className={isWishlisted ? 'text-[#651F32]' : ''} />
+                {isWishlisted ? 'Saved' : 'Save to wishlist'}
               </button>
-              <span className={tw('stock-status')}>{product.stock > 0 ? `In stock: ${product.stock} left` : 'Out of stock'}</span>
+              <span className={`text-sm font-medium ${inStock ? 'text-[#247b5c]' : 'text-[#a23b36]'}`}>
+                {inStock ? `In stock · ${product.stock} left` : 'Out of stock'}
+              </span>
             </div>
 
-            <div className={tw('pincode-checker')}>
-              <label>Check delivery availability</label>
-              <div className={tw('pincode-input-row')}>
-                <input className={tw('form-control')} value={pincode} onChange={(event) => setPincode(event.target.value)} placeholder="Enter PIN code" />
-                <button type="button" className={tw('secondary-btn')} onClick={handlePincodeCheck}>
+            {/* Pincode */}
+            <div className={`${ui.card} mt-6 p-5`}>
+              <label htmlFor="pincode" className="text-sm font-semibold text-[#2c1e19]">
+                Check delivery availability
+              </label>
+              <div className="mt-3 flex gap-2">
+                <input
+                  id="pincode"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={pincode}
+                  onChange={(event) => {
+                    setPincode(event.target.value)
+                    setDeliveryStatus(null)
+                  }}
+                  placeholder="Enter PIN code"
+                  className={ui.input}
+                />
+                <button type="button" onClick={handlePincodeCheck} className={`${ui.btnSecondary} shrink-0`}>
                   Check
                 </button>
               </div>
-              {deliveryStatus && <small>{deliveryStatus}</small>}
+              {deliveryStatus && (
+                <p className={`mt-2 text-sm ${deliveryStatus.ok ? 'text-[#247b5c]' : 'text-[#a23b36]'}`}>
+                  {deliveryStatus.text}
+                </p>
+              )}
             </div>
           </div>
         </div>
 
-        <div className={tw('product-tabs')}>
-          <button type="button" className={tw(`rounded-t-xl px-4 py-3 text-sm font-semibold ${product.activeTab === 'description' ? 'active' : 'text-[#817970]'}`)}>Description</button>
-          <button type="button">Specifications</button>
-          <button type="button">Reviews</button>
-        </div>
-
-        <div className={tw('product-tabs__content')}>
-          <div className={tw('spec-grid')}>
-            <div>
-              <span>Fabric Details</span>
-              <strong>{product.material}</strong>
-            </div>
-            <div>
-              <span>Care Instructions</span>
-              <strong>{product.care}</strong>
-            </div>
-            <div>
-              <span>Availability</span>
-              <strong>{product.stock > 0 ? 'Ready to ship' : 'Pre-order'}</strong>
-            </div>
-            <div>
-              <span>Blouse Details</span>
-              <strong>{product.blouse}</strong>
-            </div>
+        {/* Tabs */}
+        <div className="mt-12">
+          <div role="tablist" className="flex gap-1 overflow-x-auto border-b border-[#e2d9c5]">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition ${
+                  activeTab === tab.id
+                    ? 'border-[#b88a3e] text-[#2c1e19]'
+                    : 'border-transparent text-[#817970] hover:text-[#2c1e19]'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
-          <div className={tw('review-panel')}>
-            <div className={tw('review-card')}>
-              <div className={tw('review-stars')}>
-                {[...Array(5)].map((_, index) => (
-                  <Star key={index} size={14} fill="#d6ae55" strokeWidth={1.5} />
+          <div className="py-8">
+            {activeTab === 'description' && (
+              <p className="max-w-3xl text-base leading-7 text-[#71645b]">{product.description}</p>
+            )}
+
+            {activeTab === 'specifications' && (
+              <dl className="grid gap-px overflow-hidden rounded-2xl border border-[#e2d9c5] bg-[#e2d9c5] sm:grid-cols-2">
+                {specs.map((spec) => (
+                  <div key={spec.label} className="bg-[#fffdf7] p-5">
+                    <dt className="text-xs uppercase tracking-wider text-[#817970]">{spec.label}</dt>
+                    <dd className="mt-1 text-sm font-semibold text-[#2c1e19]">{spec.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+
+            {activeTab === 'reviews' && (
+              <div className="grid gap-4 md:grid-cols-2">
+                {REVIEWS.map((review) => (
+                  <figure key={review.author} className={`${ui.card} p-6`}>
+                    <Stars rating={5} />
+                    <blockquote className="mt-3 text-[15px] leading-7 text-[#493b32]">“{review.quote}”</blockquote>
+                    <figcaption className="mt-4 text-sm font-semibold text-[#2c1e19]">— {review.author}</figcaption>
+                  </figure>
                 ))}
               </div>
-              <p>â€œThe drape and finish are stunning. It felt premium from the moment I unboxed it.â€</p>
-              <strong>â€” Ankita S.</strong>
-            </div>
-            <div className={tw('review-card')}>
-              <div className={tw('review-stars')}>
-                {[...Array(5)].map((_, index) => (
-                  <Star key={index} size={14} fill="#d6ae55" strokeWidth={1.5} />
-                ))}
-              </div>
-              <p>â€œBeautiful zari work and an elegant silhouette. It is perfect for festive occasions.â€</p>
-              <strong>â€” Neha R.</strong>
-            </div>
+            )}
           </div>
         </div>
 
         {recentProducts.length > 0 && (
-          <div className={tw('related-section')}>
-            <div className={tw('section-header')}>
-              <div>
-          <span className={tw('section-label')}>You may also like</span>
-                <h2 className={tw('section-title')}>You may also like</h2>
-              </div>
-            </div>
-            <div className={tw('product-grid')}>
+          <div className="mt-12">
+            <SectionHeading eyebrow="Curated for you" title="You may also like" />
+            <div className="flex flex-wrap justify-center gap-4 sm:justify-start">
               {recentProducts.map((item) => (
                 <ProductCard
                   key={item.id}
@@ -770,125 +1257,177 @@ function ProductDetail({ addToCart, toggleWishlist, wishlist, products, product 
   )
 }
 
+/* ------------------------------------------------------------------ */
+/* Cart                                                               */
+/* ------------------------------------------------------------------ */
+
 function CartPage({ cart, subtotal, shipping, discount, updateQuantity, removeFromCart }) {
-  const [couponCode, setCouponCode] = useState('')
+  const [couponInput, setCouponInput] = useState('')
   const [appliedCoupon, setAppliedCoupon] = useState('')
 
   const discountValue = appliedCoupon === 'NEW10' ? 699 : discount
-
-  const totalWithCoupon = Math.max(subtotal + shipping - discountValue, 0)
+  const total = Math.max(subtotal + shipping - discountValue, 0)
 
   if (!cart.length) {
     return (
-      <section className={tw('section-wrap')}>
-        <div className={tw('container empty-state large-empty')}>
-          <ShoppingBag size={42} />
-          <h2>Your cart is empty</h2>
-          <p>Explore our latest saree drops and add your favourites to the cart.</p>
-          <Link to="/shop" className={tw('primary-btn')}>
-            Continue Shopping
-            <ArrowRight size={18} />
-          </Link>
-        </div>
-      </section>
+      <EmptyState
+        icon={ShoppingBag}
+        title="Your cart is empty"
+        description="Explore our latest saree drops and add your favourites to the bag."
+        actionLabel="Continue shopping"
+      />
     )
   }
 
   return (
-    <section className={tw('section-wrap')}>
-      <div className={tw('container cart-layout')}>
-        <div className={tw('cart-items-panel')}>
-          <div className={tw('section-header compact-header')}>
+    <section className={ui.section}>
+      <div className={`${ui.container} grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,0.8fr)] lg:gap-8`}>
+        <div className={`${ui.card} ${ui.cardPad}`}>
+          <div className="mb-4 flex items-start justify-between gap-3">
             <div>
-              <span className={tw('section-label')}>Your Bag</span>
-              <h2 className={tw('section-title')}>Shopping Cart</h2>
+              <span className={ui.eyebrow}>Your bag</span>
+              <h1 className={`mt-2 ${ui.h2}`}>Shopping cart</h1>
             </div>
-            <Link to="/shop" className={tw('secondary-btn')}>
-              Continue Shopping
+            <Link to="/shop" className={`${ui.btnGhost} shrink-0`}>
+              Continue shopping
             </Link>
           </div>
 
-          {cart.map((item) => (
-            <div className={tw('cart-item')} key={`${item.id}-${item.variant}`}>
-              <ImageWithFallback src={item.image} alt={item.name} className="h-24 w-20 shrink-0 rounded-xl object-cover" />
-              <div className={tw('cart-item__details')}>
-                <h3>{item.name}</h3>
-                <p>{item.variant}</p>
-                <div className={tw('cart-item__meta')}>
-                  <strong>{formatPrice(item.price)}</strong>
-                  <div className={tw('quantity-picker small')}>
-                    <button type="button" onClick={() => updateQuantity(item.id, item.variant, -1)}>
-                      <Minus size={14} />
-                    </button>
-                    <span>{item.quantity}</span>
-                    <button type="button" onClick={() => updateQuantity(item.id, item.variant, 1)}>
-                      <Plus size={14} />
+          <ul className="divide-y divide-[#e2d9c5]">
+            {cart.map((item) => (
+              <li key={`${item.id}-${item.variant}`} className="flex gap-4 py-5">
+                <ImageWithFallback
+                  src={item.image}
+                  alt={item.name}
+                  className="h-28 w-24 shrink-0 rounded-xl object-cover"
+                />
+                <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="text-sm font-semibold leading-5 text-[#2c1e19] sm:text-base">{item.name}</h2>
+                      <p className="mt-1 text-xs text-[#817970] sm:text-sm">{item.variant}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeFromCart(item.id, item.variant)}
+                      aria-label={`Remove ${item.name}`}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[#817970] transition hover:bg-[#f3e7e5] hover:text-[#a23b36]"
+                    >
+                      <Trash2 size={15} />
                     </button>
                   </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="inline-flex min-h-10 items-center gap-3 rounded-xl border border-[#e2d9c5] bg-white px-2">
+                      <button
+                        type="button"
+                        aria-label="Decrease quantity"
+                        onClick={() => updateQuantity(item.id, item.variant, -1)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-[#eee7d7]"
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <span className="w-5 text-center text-sm font-semibold">{item.quantity}</span>
+                      <button
+                        type="button"
+                        aria-label="Increase quantity"
+                        onClick={() => updateQuantity(item.id, item.variant, 1)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-[#eee7d7]"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                    <strong className="text-sm text-[#2c1e19] sm:text-base">
+                      {formatPrice(item.price * item.quantity)}
+                    </strong>
+                  </div>
                 </div>
-              </div>
-              <button type="button" className={tw('remove-btn')} onClick={() => removeFromCart(item.id, item.variant)}>
-                <Trash2 size={15} />
-              </button>
-            </div>
-          ))}
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <div className={tw('summary-panel')}>
-          <h3>Order Summary</h3>
-          <div className={tw('summary-line')}>
-            <span>Subtotal</span>
-            <strong>{formatPrice(subtotal)}</strong>
-          </div>
-          <div className={tw('summary-line')}>
-            <span>Discount</span>
-            <strong>-{formatPrice(discountValue)}</strong>
-          </div>
-          <div className={tw('summary-line')}>
-            <span>Shipping</span>
-            <strong>{shipping === 0 ? 'Free' : formatPrice(shipping)}</strong>
-          </div>
+        <aside className={`${ui.card} ${ui.cardPad} h-fit lg:sticky lg:top-28`}>
+          <h2 className={ui.h3}>Order summary</h2>
 
-          <div className={tw('coupon-box')}>
-            <input className={tw('form-control')} value={couponCode} onChange={(event) => setCouponCode(event.target.value)} placeholder="Coupon code" />
-            <button type="button" className={tw('secondary-btn')} onClick={() => setAppliedCoupon(couponCode.trim() || '')}>
+          <dl className="mt-4 space-y-3 border-b border-[#e2d9c5] pb-4 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-[#71645b]">Subtotal</dt>
+              <dd className="text-[#2c1e19]">{formatPrice(subtotal)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-[#71645b]">Discount{appliedCoupon === 'NEW10' ? ' (NEW10)' : ' (12%)'}</dt>
+              <dd className="text-[#247b5c]">−{formatPrice(discountValue)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-[#71645b]">Shipping</dt>
+              <dd className="text-[#2c1e19]">{shipping === 0 ? 'Free' : formatPrice(shipping)}</dd>
+            </div>
+          </dl>
+
+          <form
+            className="mt-4 flex gap-2"
+            onSubmit={(event) => {
+              event.preventDefault()
+              setAppliedCoupon(couponInput.trim().toUpperCase())
+            }}
+          >
+            <input
+              className={ui.input}
+              value={couponInput}
+              onChange={(event) => setCouponInput(event.target.value)}
+              placeholder="Coupon code"
+              aria-label="Coupon code"
+            />
+            <button type="submit" className={`${ui.btnSecondary} shrink-0`}>
               Apply
             </button>
+          </form>
+
+          <div className="mt-5 flex items-center justify-between">
+            <span className="font-semibold text-[#2c1e19]">Total</span>
+            <strong className="text-xl text-[#2c1e19]">{formatPrice(total)}</strong>
           </div>
 
-          <div className={tw('summary-total')}>
-            <span>Total</span>
-            <strong>{formatPrice(totalWithCoupon)}</strong>
-          </div>
-
-          <Link to="/checkout" className={tw('primary-btn full-width justify-center')}>
-            Proceed to Checkout
+          <Link to="/checkout" className={`${ui.btnPrimary} mt-5 w-full`}>
+            Proceed to checkout
+            <ArrowRight size={18} />
           </Link>
-        </div>
+        </aside>
       </div>
     </section>
   )
 }
 
-function CheckoutPage({ cart, total, shipping }) {
+/* ------------------------------------------------------------------ */
+/* Checkout                                                           */
+/* ------------------------------------------------------------------ */
+
+const INITIAL_CHECKOUT_FORM = {
+  fullName: '',
+  email: '',
+  mobile: '',
+  address: '',
+  city: '',
+  state: '',
+  country: 'India',
+  pincode: '',
+  deliveryMethod: 'Standard Delivery',
+  paymentMethod: 'Cash on Delivery',
+}
+
+function CheckoutPage({ cart, subtotal, shipping, discount, onOrderPlaced }) {
   const navigate = useNavigate()
   const [firebaseUser, setFirebaseUser] = useState(auth.currentUser)
-  const [isSavingAddress, setIsSavingAddress] = useState(false)
+  const [isPlacing, setIsPlacing] = useState(false)
   const [submitError, setSubmitError] = useState('')
-  const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    mobile: '',
-    address: '',
-    city: '',
-    state: '',
-    country: 'India',
-    pincode: '',
-    deliveryMethod: 'Standard Delivery',
-    paymentMethod: 'UPI',
-  })
   const [errors, setErrors] = useState({})
-  const [submitted, setSubmitted] = useState(false)
+  const [placedOrder, setPlacedOrder] = useState(null)
+  const [formData, setFormData] = useState(INITIAL_CHECKOUT_FORM)
+
+  const discountAmount = Math.round(discount)
+  const grandTotal = Math.max(subtotal - discountAmount + shipping, 0)
+  const isCod = formData.paymentMethod === 'Cash on Delivery'
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -901,29 +1440,60 @@ function CheckoutPage({ cart, total, shipping }) {
         }))
       }
     })
-
     return unsubscribe
   }, [])
 
   const handleChange = (event) => {
     const { name, value } = event.target
     setFormData((current) => ({ ...current, [name]: value }))
+    setErrors((current) => ({ ...current, [name]: undefined }))
     setSubmitError('')
   }
 
   const validateForm = () => {
     const nextErrors = {}
+    const mobileDigits = formData.mobile.replace(/\D/g, '')
 
     if (!formData.fullName.trim()) nextErrors.fullName = 'Full name is required.'
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) nextErrors.email = 'Enter a valid email.'
-    if (formData.mobile.length < 10) nextErrors.mobile = 'Enter a valid mobile number.'
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) nextErrors.email = 'Enter a valid email.'
+    if (!/^[6-9]\d{9}$/.test(mobileDigits)) nextErrors.mobile = 'Enter a valid 10-digit mobile number.'
     if (!formData.address.trim()) nextErrors.address = 'Street address is required.'
     if (!formData.city.trim()) nextErrors.city = 'City is required.'
     if (!formData.state.trim()) nextErrors.state = 'State is required.'
-    if (!formData.pincode.trim()) nextErrors.pincode = 'PIN code is required.'
+    if (!/^\d{6}$/.test(formData.pincode.trim())) nextErrors.pincode = 'Enter a valid 6-digit PIN code.'
 
     return nextErrors
   }
+
+  const buildOrder = () => ({
+    id: `ANY-${Date.now().toString(36).toUpperCase()}`,
+    items: cart.map((item) => ({
+      id: item.id,
+      name: item.name,
+      variant: item.variant,
+      image: item.image,
+      price: item.price,
+      quantity: item.quantity,
+    })),
+    customer: {
+      name: formData.fullName.trim(),
+      email: formData.email.trim(),
+      mobile: formData.mobile.replace(/\D/g, ''),
+    },
+    address: {
+      street: formData.address.trim(),
+      city: formData.city.trim(),
+      state: formData.state.trim(),
+      zip: formData.pincode.trim(),
+      country: formData.country.trim() || 'India',
+    },
+    deliveryMethod: formData.deliveryMethod,
+    paymentMethod: formData.paymentMethod,
+    paymentStatus: isCod ? 'Pay on delivery' : 'Pending payment',
+    totals: { subtotal, discount: discountAmount, shipping, grandTotal },
+    status: 'Placed',
+    createdAt: new Date().toISOString(),
+  })
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -936,38 +1506,72 @@ function CheckoutPage({ cart, total, shipping }) {
 
     const nextErrors = validateForm()
     setErrors(nextErrors)
-
     if (Object.keys(nextErrors).length > 0) return
 
-    const currentUser = auth.currentUser
-    if (currentUser) {
-      setIsSavingAddress(true)
-      try {
-        await saveCheckoutAddress(currentUser, formData)
-      } catch (error) {
-        setSubmitError(
-          error?.code === 'permission-denied'
-            ? 'Your address could not be saved. Firestore rules must allow signed-in users to update their own users/{uid} document.'
-            : 'Your address could not be saved to Firebase. Please try again.',
-        )
-        return
-      } finally {
-        setIsSavingAddress(false)
-      }
-    }
+    setIsPlacing(true)
+    try {
+      const currentUser = auth.currentUser
+      if (currentUser) await saveCheckoutAddress(currentUser, formData)
 
-    setSubmitted(true)
+      const order = buildOrder()
+      try {
+        const existing = JSON.parse(window.localStorage.getItem(ORDERS_STORAGE_KEY) || '[]')
+        writeStorage(ORDERS_STORAGE_KEY, [order, ...existing])
+      } catch {
+        // Ignore local persistence errors; Firestore still receives the order for signed-in users.
+      }
+      if (currentUser) await saveOrderToFirestore(currentUser, order)
+
+      setPlacedOrder(order)
+      onOrderPlaced()
+    } catch (error) {
+      setSubmitError(
+        error?.code === 'permission-denied'
+          ? 'We could not place your order because of a permissions issue. Please contact support.'
+          : 'Something went wrong while placing your order. Please try again.',
+      )
+    } finally {
+      setIsPlacing(false)
+    }
   }
 
-  if (submitted) {
+  if (placedOrder) {
     return (
-      <section className={tw('section-wrap')}>
-        <div className={tw('container empty-state large-empty')}>
-          <Check size={42} />
-          <h2>Order placed successfully</h2>
-          <p>Your booking is confirmed and a confirmation message has been sent to your email.</p>
-          <Link to="/shop" className={tw('primary-btn')}>
-            Continue Shopping
+      <section className={ui.section}>
+        <div className={`${ui.card} mx-auto max-w-xl p-6 text-center sm:p-10`}>
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#eaf7f1] text-[#247b5c]">
+            <Check size={28} />
+          </span>
+          <h1 className={`mt-5 ${ui.h2}`}>Order placed successfully</h1>
+          <p className="mt-2 text-sm text-[#71645b]">
+            Order ID <strong className="text-[#2c1e19]">{placedOrder.id}</strong>
+          </p>
+
+          <div className="mt-6 rounded-2xl bg-[#f8f5e9] p-4 text-left text-sm">
+            <div className="flex justify-between py-1.5 text-[#71645b]">
+              <span>Payment</span>
+              <strong className="text-[#2c1e19]">{placedOrder.paymentMethod}</strong>
+            </div>
+            <div className="flex justify-between py-1.5 text-[#71645b]">
+              <span>Delivery</span>
+              <strong className="text-[#2c1e19]">{placedOrder.deliveryMethod}</strong>
+            </div>
+            <div className="mt-2 flex justify-between border-t border-[#e2d9c5] pt-3 text-base">
+              <span className="font-semibold text-[#2c1e19]">
+                {placedOrder.paymentMethod === 'Cash on Delivery' ? 'Pay on delivery' : 'Amount'}
+              </span>
+              <strong className="text-[#2c1e19]">{formatPrice(placedOrder.totals.grandTotal)}</strong>
+            </div>
+          </div>
+
+          <p className="mt-5 text-sm text-[#71645b]">
+            {placedOrder.paymentMethod === 'Cash on Delivery'
+              ? `Please keep ${formatPrice(placedOrder.totals.grandTotal)} in cash ready. A confirmation will be sent to ${placedOrder.customer.email}.`
+              : `A confirmation will be sent to ${placedOrder.customer.email}.`}
+          </p>
+
+          <Link to="/shop" className={`${ui.btnPrimary} mt-7 w-full`}>
+            Continue shopping
             <ArrowRight size={18} />
           </Link>
         </div>
@@ -975,148 +1579,172 @@ function CheckoutPage({ cart, total, shipping }) {
     )
   }
 
+  if (!cart.length) {
+    return (
+      <EmptyState
+        icon={ShoppingBag}
+        title="Your bag is empty"
+        description="Add a saree to your bag before checking out."
+        actionLabel="Explore sarees"
+      />
+    )
+  }
+
   return (
-    <section className={tw('section-wrap')}>
-      <div className={tw('container checkout-layout')}>
-        <form className={tw('checkout-form')} onSubmit={handleSubmit} noValidate>
-          <div className={tw('checkout-step')}>
-            <span className={tw('section-label')}>Step 1</span>
-            <h3>Customer Information</h3>
-            <div className={tw('field-grid two-columns')}>
-              <div className={tw('field')}>
-                <label>Full Name</label>
-                <input className={tw('form-control')} name="fullName" value={formData.fullName} onChange={handleChange} />
-                {errors.fullName && <small>{errors.fullName}</small>}
-              </div>
-              <div className={tw('field')}>
-                <label>Email</label>
-                <input className={tw('form-control')} name="email" type="email" value={formData.email} onChange={handleChange} />
-                {errors.email && <small>{errors.email}</small>}
-              </div>
-              <div className={tw('field')}>
-                <label>Mobile Number</label>
-                <input className={tw('form-control')} name="mobile" value={formData.mobile} onChange={handleChange} />
-                {errors.mobile && <small>{errors.mobile}</small>}
-              </div>
+    <section className={ui.section}>
+      <div className={`${ui.container} grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)] lg:gap-8`}>
+        <form className="space-y-5" onSubmit={handleSubmit} noValidate>
+          <div className={`${ui.card} ${ui.cardPad}`}>
+            <StepHeader step="1" title="Customer information" />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Full name" error={errors.fullName} className="sm:col-span-2">
+                <input className={ui.input} name="fullName" autoComplete="name" value={formData.fullName} onChange={handleChange} />
+              </Field>
+              <Field label="Email" error={errors.email}>
+                <input className={ui.input} name="email" type="email" autoComplete="email" value={formData.email} onChange={handleChange} />
+              </Field>
+              <Field label="Mobile number" error={errors.mobile}>
+                <input
+                  className={ui.input}
+                  name="mobile"
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  placeholder="10-digit number"
+                  value={formData.mobile}
+                  onChange={handleChange}
+                />
+              </Field>
             </div>
           </div>
 
-          <div className={tw('checkout-step')}>
-            <span className={tw('section-label')}>Step 2</span>
-            <h3>Shipping Address</h3>
-            <p className={tw('mb-4 text-sm text-[#71645b]')}>
-              {firebaseUser
-                ? 'This address will be saved to your account.'
-                : 'Sign in to save this address to your account. Guest checkout is still available.'}
-            </p>
-            <div className={tw('field-grid two-columns')}>
-              <div className={tw('field full-span')}>
-                <label>House/Flat Number</label>
-                <input className={tw('form-control')} name="address" value={formData.address} onChange={handleChange} />
-                {errors.address && <small>{errors.address}</small>}
-              </div>
-              <div className={tw('field')}>
-                <label>City</label>
-                <input className={tw('form-control')} name="city" value={formData.city} onChange={handleChange} />
-                {errors.city && <small>{errors.city}</small>}
-              </div>
-              <div className={tw('field')}>
-                <label>State</label>
-                <input className={tw('form-control')} name="state" value={formData.state} onChange={handleChange} />
-                {errors.state && <small>{errors.state}</small>}
-              </div>
-              <div className={tw('field')}>
-                <label>Country</label>
-                <input className={tw('form-control')} name="country" value={formData.country} onChange={handleChange} />
-              </div>
-              <div className={tw('field')}>
-                <label>PIN Code</label>
-                <input className={tw('form-control')} name="pincode" value={formData.pincode} onChange={handleChange} />
-                {errors.pincode && <small>{errors.pincode}</small>}
-              </div>
+          <div className={`${ui.card} ${ui.cardPad}`}>
+            <StepHeader
+              step="2"
+              title="Shipping address"
+              subtitle={
+                firebaseUser
+                  ? 'This address will be saved to your account.'
+                  : 'Sign in to save this address to your account. Guest checkout is still available.'
+              }
+            />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="House / flat number, street" error={errors.address} className="sm:col-span-2">
+                <input className={ui.input} name="address" autoComplete="street-address" value={formData.address} onChange={handleChange} />
+              </Field>
+              <Field label="City" error={errors.city}>
+                <input className={ui.input} name="city" autoComplete="address-level2" value={formData.city} onChange={handleChange} />
+              </Field>
+              <Field label="State" error={errors.state}>
+                <input className={ui.input} name="state" autoComplete="address-level1" value={formData.state} onChange={handleChange} />
+              </Field>
+              <Field label="PIN code" error={errors.pincode}>
+                <input
+                  className={ui.input}
+                  name="pincode"
+                  inputMode="numeric"
+                  maxLength={6}
+                  autoComplete="postal-code"
+                  value={formData.pincode}
+                  onChange={handleChange}
+                />
+              </Field>
+              <Field label="Country">
+                <input className={ui.input} name="country" value={formData.country} onChange={handleChange} />
+              </Field>
             </div>
           </div>
 
-          <div className={tw('checkout-step')}>
-            <span className={tw('section-label')}>Step 3</span>
-            <h3>Delivery Method</h3>
-            <div className={tw('radio-list')}>
-              {['Standard Delivery', 'Express Delivery', 'Pickup at Store'].map((method) => (
-                <label key={method} className={tw('radio-option')}>
-                  <input className={tw('form-control')}
-                    type="radio"
-                    name="deliveryMethod"
-                    value={method}
-                    checked={formData.deliveryMethod === method}
-                    onChange={handleChange}
-                  />
-                  <span>{method}</span>
-                </label>
+          <div className={`${ui.card} ${ui.cardPad}`}>
+            <StepHeader step="3" title="Delivery method" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              {DELIVERY_OPTIONS.map((option) => (
+                <OptionCard
+                  key={option.value}
+                  name="deliveryMethod"
+                  value={option.value}
+                  description={option.description}
+                  checked={formData.deliveryMethod === option.value}
+                  onChange={handleChange}
+                />
               ))}
             </div>
           </div>
 
-          <div className={tw('checkout-step')}>
-            <span className={tw('section-label')}>Step 4</span>
-            <h3>Payment Method</h3>
-            <div className={tw('radio-list')}>
-              {['UPI', 'Credit/Debit Cards', 'Net Banking', 'Wallets', 'Cash on Delivery'].map((method) => (
-                <label key={method} className={tw('radio-option')}>
-                  <input className={tw('form-control')}
-                    type="radio"
-                    name="paymentMethod"
-                    value={method}
-                    checked={formData.paymentMethod === method}
-                    onChange={handleChange}
-                  />
-                  <span>{method}</span>
-                </label>
+          <div className={`${ui.card} ${ui.cardPad}`}>
+            <StepHeader step="4" title="Payment method" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              {PAYMENT_OPTIONS.map((option) => (
+                <OptionCard
+                  key={option.value}
+                  name="paymentMethod"
+                  value={option.value}
+                  description={option.description}
+                  checked={formData.paymentMethod === option.value}
+                  onChange={handleChange}
+                />
               ))}
             </div>
+            {isCod && (
+              <p className="mt-4 rounded-xl bg-[#fbf6ea] p-3 text-sm text-[#493b32]">
+                Pay {formatPrice(grandTotal)} in cash when your order is delivered. Please keep the exact amount ready.
+              </p>
+            )}
           </div>
 
           {submitError && (
-            <p role="alert" className={tw('text-sm text-red-700')}>
+            <p role="alert" className={ui.alertError}>
               {submitError}
             </p>
           )}
 
-          <button
-            type="submit"
-            className={tw('primary-btn full-width justify-center')}
-            disabled={isSavingAddress}
-          >
-            {isSavingAddress ? 'Saving address...' : 'Place Order'}
+          <button type="submit" disabled={isPlacing} className={`${ui.btnPrimary} w-full py-3.5`}>
+            {isPlacing
+              ? 'Placing order…'
+              : `${isCod ? 'Place COD order' : 'Place order'} · ${formatPrice(grandTotal)}`}
           </button>
         </form>
 
-        <aside className={tw('summary-panel checkout-summary')}>
-          <h3>Order Summary</h3>
-          <div className={tw('summary-items')}>
+        <aside className={`${ui.card} ${ui.cardPad} h-fit lg:sticky lg:top-28`}>
+          <h2 className={ui.h3}>Order summary</h2>
+
+          <ul className="mt-4 space-y-4 border-b border-[#e2d9c5] pb-4">
             {cart.map((item) => (
-              <div key={`${item.id}-${item.variant}`} className={tw('summary-item')}>
-                <span>
-                  {item.name} x {item.quantity}
-                </span>
-                <strong>{formatPrice(item.price * item.quantity)}</strong>
-              </div>
+              <li key={`${item.id}-${item.variant}`} className="flex gap-3">
+                <ImageWithFallback src={item.image} alt={item.name} className="h-16 w-14 shrink-0 rounded-lg object-cover" />
+                <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="line-clamp-2 text-sm font-medium text-[#2c1e19]">{item.name}</p>
+                    <p className="mt-0.5 text-xs text-[#817970]">
+                      {item.variant} · Qty {item.quantity}
+                    </p>
+                  </div>
+                  <strong className="shrink-0 text-sm text-[#2c1e19]">
+                    {formatPrice(item.price * item.quantity)}
+                  </strong>
+                </div>
+              </li>
             ))}
-          </div>
-          <div className={tw('summary-line')}>
-            <span>Subtotal</span>
-            <strong>{formatPrice(total)}</strong>
-          </div>
-          <div className={tw('summary-line')}>
-            <span>Shipping</span>
-            <strong>{shipping === 0 ? 'Free' : formatPrice(shipping)}</strong>
-          </div>
-          <div className={tw('summary-line')}>
-            <span>Discount</span>
-            <strong>-â‚¹699</strong>
-          </div>
-          <div className={tw('summary-total')}>
-            <span>Grand Total</span>
-            <strong>{formatPrice(Math.max(total + shipping - 699, 0))}</strong>
+          </ul>
+
+          <dl className="space-y-2.5 py-4 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-[#71645b]">Subtotal</dt>
+              <dd className="text-[#2c1e19]">{formatPrice(subtotal)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-[#71645b]">Discount (12%)</dt>
+              <dd className="text-[#247b5c]">−{formatPrice(discountAmount)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-[#71645b]">Shipping</dt>
+              <dd className="text-[#2c1e19]">{shipping === 0 ? 'Free' : formatPrice(shipping)}</dd>
+            </div>
+          </dl>
+
+          <div className="flex items-center justify-between border-t border-[#e2d9c5] pt-4">
+            <span className="font-semibold text-[#2c1e19]">Grand total</span>
+            <strong className="text-xl text-[#2c1e19]">{formatPrice(grandTotal)}</strong>
           </div>
         </aside>
       </div>
@@ -1124,126 +1752,19 @@ function CheckoutPage({ cart, total, shipping }) {
   )
 }
 
-const googleProvider = new GoogleAuthProvider()
+/* ------------------------------------------------------------------ */
+/* Account                                                            */
+/* ------------------------------------------------------------------ */
 
-const getAuthErrorMessage = (error) => {
-  const messages = {
-    'auth/email-already-in-use': 'This email is already registered. Please log in instead.',
-    'auth/invalid-credential': 'Email or password is incorrect.',
-    'auth/invalid-email': 'Enter a valid email address.',
-    'auth/network-request-failed': 'Network error. Check your connection and try again.',
-    'auth/operation-not-allowed': 'This sign-in method is not enabled in Firebase Console.',
-    'auth/popup-blocked': 'Your browser blocked the Google sign-in popup. Allow popups and try again.',
-    'auth/popup-closed-by-user': 'Google sign-in was cancelled.',
-    'auth/unauthorized-domain': 'Add this website domain to Firebase Authentication authorized domains.',
-    'auth/weak-password': 'Choose a password with at least 6 characters.',
-    'auth/user-disabled': 'This account has been disabled.',
-  }
-
-  return messages[error?.code] || 'Unable to authenticate. Please try again.'
-}
-
-const saveUserProfile = async (firebaseUser) => {
-  const userRef = doc(db, 'users', firebaseUser.uid)
-  const profileSnapshot = await getDoc(userRef)
-  const existingProfile = profileSnapshot.exists() ? profileSnapshot.data() : {}
-
-  await setDoc(
-    userRef,
-    {
-      uid: firebaseUser.uid,
-      name:
-        firebaseUser.displayName ||
-        existingProfile.name ||
-        firebaseUser.email?.split('@')[0] ||
-        'Customer',
-      email: firebaseUser.email || existingProfile.email || null,
-      ...(firebaseUser.photoURL ? { photoURL: firebaseUser.photoURL } : {}),
-      ...(!profileSnapshot.exists()
-        ? { role: 'customer', createdAt: serverTimestamp() }
-        : {}),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
+function GoogleIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 48 48" className="h-5 w-5">
+      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5Z" />
+      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.76 7.18l7.73 6C44.42 38.05 46.98 31.97 46.98 24.55Z" />
+      <path fill="#FBBC05" d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.88.93 7.55 2.56 10.78l7.97-6.19Z" />
+      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.91-5.8l-7.73-6c-2.14 1.44-4.89 2.3-8.18 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48Z" />
+    </svg>
   )
-}
-
-const getAddressKey = (address) => [
-  address.street,
-  address.city,
-  address.state,
-  address.zip,
-  address.country,
-].map((value) => String(value || '').trim().toLowerCase()).join('|')
-
-const saveCheckoutAddress = async (firebaseUser, formData) => {
-  const userRef = doc(db, 'users', firebaseUser.uid)
-  const profileSnapshot = await getDoc(userRef)
-  const profile = profileSnapshot.exists() ? profileSnapshot.data() : {}
-  const addresses = Array.isArray(profile.addresses)
-    ? profile.addresses.filter((address) => address && typeof address === 'object')
-    : []
-  const address = {
-    street: formData.address.trim(),
-    city: formData.city.trim(),
-    state: formData.state.trim(),
-    zip: formData.pincode.trim(),
-    country: formData.country.trim() || 'India',
-  }
-  const matchingAddressIndex = addresses.findIndex(
-    (savedAddress) => getAddressKey(savedAddress) === getAddressKey(address),
-  )
-  const hasDefaultAddress = addresses.some((savedAddress) => savedAddress.isDefault === true)
-  const makeDefault = !hasDefaultAddress
-  let nextAddresses
-
-  if (matchingAddressIndex >= 0) {
-    nextAddresses = addresses.map((savedAddress, index) => (
-      index === matchingAddressIndex && makeDefault
-        ? { ...savedAddress, isDefault: true }
-        : savedAddress
-    ))
-  } else {
-    nextAddresses = [
-      ...addresses.map((savedAddress) => (
-        makeDefault ? { ...savedAddress, isDefault: false } : savedAddress
-      )),
-      {
-        id: `addr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        ...address,
-        isDefault: makeDefault,
-        createdAt: new Date().toISOString(),
-      },
-    ]
-  }
-
-  await setDoc(
-    userRef,
-    {
-      uid: firebaseUser.uid,
-      name:
-        formData.fullName.trim() ||
-        firebaseUser.displayName ||
-        profile.name ||
-        firebaseUser.email?.split('@')[0] ||
-        'Customer',
-      email: formData.email.trim() || firebaseUser.email || profile.email || null,
-      ...(formData.mobile.trim() ? { phone: formData.mobile.trim() } : {}),
-      addresses: nextAddresses,
-      ...(!profileSnapshot.exists()
-        ? { role: 'customer', createdAt: serverTimestamp() }
-        : {}),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  )
-}
-
-const getProfileSyncErrorMessage = (error) => {
-  if (error?.code === 'permission-denied') {
-    return 'You are signed in, but Firestore rules blocked saving your profile. Allow users to write only their own users/{uid} document.'
-  }
-  return 'You are signed in, but your profile could not be saved to Firestore. Please try again.'
 }
 
 function AccountPage() {
@@ -1266,7 +1787,11 @@ function AccountPage() {
           try {
             await saveUserProfile(currentUser)
           } catch (error) {
-            setErrorMessage(getProfileSyncErrorMessage(error))
+            setErrorMessage(
+              error?.code === 'permission-denied'
+                ? 'You are signed in, but Firestore rules blocked saving your profile.'
+                : 'You are signed in, but your profile could not be saved. Please try again.',
+            )
           }
         }
       },
@@ -1278,6 +1803,11 @@ function AccountPage() {
 
     return unsubscribe
   }, [])
+
+  const switchTab = (tab) => {
+    setActiveTab(tab)
+    setErrorMessage('')
+  }
 
   const handleInputChange = (event) => {
     const { name, value } = event.target
@@ -1313,7 +1843,6 @@ function AccountPage() {
   const handleGoogleSignIn = async () => {
     setErrorMessage('')
     setIsSubmitting(true)
-
     try {
       await signInWithPopup(auth, googleProvider)
     } catch (error) {
@@ -1326,7 +1855,6 @@ function AccountPage() {
   const handleSignOut = async () => {
     setErrorMessage('')
     setIsSubmitting(true)
-
     try {
       await signOut(auth)
     } catch (error) {
@@ -1336,84 +1864,78 @@ function AccountPage() {
     }
   }
 
+  const perks = [
+    'Wishlist saved for future picks',
+    'Order history and delivery tracking',
+    'Saved addresses and secure checkout',
+    'Easy returns and support requests',
+  ]
+
   return (
-    <section className={tw('section-wrap')}>
-      <div className={tw('container account-layout')}>
-        <div className={tw('account-card')}>
+    <section className={ui.section}>
+      <div className={`${ui.container} grid gap-6 lg:grid-cols-2`}>
+        <div className={`${ui.card} ${ui.cardPad} sm:p-8`}>
           {authLoading ? (
-            <p role="status" className={tw('text-sm text-[#71645b]')}>Checking your account...</p>
+            <p role="status" className={ui.body}>Checking your account…</p>
           ) : user ? (
-            <div className={tw('account-form')}>
-              <span className={tw('section-label')}>Signed in</span>
-              <h2 className={tw('text-2xl font-semibold text-[#2c1e19]')}>
+            <div className="space-y-4">
+              <span className={ui.eyebrow}>Signed in</span>
+              <h1 className={ui.h2}>
                 Welcome, {user.displayName || user.email?.split('@')[0] || 'Customer'}
-              </h2>
-              <p className={tw('text-sm text-[#71645b]')}>{user.email}</p>
-              {errorMessage && <p role="alert" className={tw('text-sm text-red-700')}>{errorMessage}</p>}
-              <button
-                type="button"
-                className={tw('secondary-btn')}
-                onClick={handleSignOut}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Signing out...' : 'Sign out'}
+              </h1>
+              <p className={ui.body}>{user.email}</p>
+              {errorMessage && <p role="alert" className={ui.alertError}>{errorMessage}</p>}
+              <button type="button" onClick={handleSignOut} disabled={isSubmitting} className={ui.btnSecondary}>
+                {isSubmitting ? 'Signing out…' : 'Sign out'}
               </button>
             </div>
           ) : (
             <>
-              <div className={tw('tab-switcher')}>
-                <button
-                  type="button"
-                  className={tw(`rounded-t-xl px-4 py-3 text-sm font-semibold ${activeTab === 'login' ? 'active' : 'text-[#817970]'}`)}
-                  onClick={() => {
-                    setActiveTab('login')
-                    setErrorMessage('')
-                  }}
-                >
-                  Login
-                </button>
-                <button
-                  type="button"
-                  className={tw(`rounded-t-xl px-4 py-3 text-sm font-semibold ${activeTab === 'signup' ? 'active' : 'text-[#817970]'}`)}
-                  onClick={() => {
-                    setActiveTab('signup')
-                    setErrorMessage('')
-                  }}
-                >
-                  Sign Up
-                </button>
+              <div role="tablist" className="mb-6 flex gap-1 border-b border-[#e2d9c5]">
+                {[
+                  { id: 'login', label: 'Login' },
+                  { id: 'signup', label: 'Sign up' },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    role="tab"
+                    aria-selected={activeTab === tab.id}
+                    type="button"
+                    onClick={() => switchTab(tab.id)}
+                    className={`border-b-2 px-4 py-3 text-sm font-semibold transition ${
+                      activeTab === tab.id
+                        ? 'border-[#b88a3e] text-[#2c1e19]'
+                        : 'border-transparent text-[#817970] hover:text-[#2c1e19]'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
 
-              {errorMessage && (
-                <p role="alert" className={tw('mb-4 text-sm text-red-700')}>
-                  {errorMessage}
-                </p>
-              )}
+              {errorMessage && <p role="alert" className={`mb-4 ${ui.alertError}`}>{errorMessage}</p>}
 
               <button
                 type="button"
-                className={tw('secondary-btn full-width justify-center')}
                 onClick={handleGoogleSignIn}
                 disabled={isSubmitting}
+                className={`${ui.btnSecondary} w-full`}
               >
-                <svg aria-hidden="true" viewBox="0 0 48 48" className={tw('h-5 w-5')}>
-                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5Z" />
-                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.76 7.18l7.73 6C44.42 38.05 46.98 31.97 46.98 24.55Z" />
-                  <path fill="#FBBC05" d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.88.93 7.55 2.56 10.78l7.97-6.19Z" />
-                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.91-5.8l-7.73-6c-2.14 1.44-4.89 2.3-8.18 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48Z" />
-                </svg>
-                {isSubmitting ? 'Please wait...' : 'Continue with Google'}
+                <GoogleIcon />
+                {isSubmitting ? 'Please wait…' : 'Continue with Google'}
               </button>
 
-              <div className={tw('my-5 text-center text-xs text-[#817970]')}>or continue with email</div>
+              <div className="my-5 flex items-center gap-3 text-xs text-[#817970]">
+                <span className="h-px flex-1 bg-[#e2d9c5]" />
+                or continue with email
+                <span className="h-px flex-1 bg-[#e2d9c5]" />
+              </div>
 
-              <form className={tw('account-form')} onSubmit={handleSubmit}>
+              <form className="space-y-4" onSubmit={handleSubmit}>
                 {activeTab === 'signup' && (
-                  <div className={tw('field')}>
-                    <label htmlFor="account-full-name">Full Name</label>
+                  <Field label="Full name">
                     <input
-                      className={tw('form-control')}
-                      id="account-full-name"
+                      className={ui.input}
                       name="fullName"
                       type="text"
                       autoComplete="name"
@@ -1422,13 +1944,11 @@ function AccountPage() {
                       placeholder="Enter full name"
                       required
                     />
-                  </div>
+                  </Field>
                 )}
-                <div className={tw('field')}>
-                  <label htmlFor="account-email">Email</label>
+                <Field label="Email">
                   <input
-                    className={tw('form-control')}
-                    id="account-email"
+                    className={ui.input}
                     name="email"
                     type="email"
                     autoComplete="email"
@@ -1437,12 +1957,10 @@ function AccountPage() {
                     placeholder="name@example.com"
                     required
                   />
-                </div>
-                <div className={tw('field')}>
-                  <label htmlFor="account-password">Password</label>
+                </Field>
+                <Field label="Password">
                   <input
-                    className={tw('form-control')}
-                    id="account-password"
+                    className={ui.input}
                     name="password"
                     type="password"
                     autoComplete={activeTab === 'login' ? 'current-password' : 'new-password'}
@@ -1452,31 +1970,31 @@ function AccountPage() {
                     minLength={6}
                     required
                   />
-                </div>
-                <button
-                  type="submit"
-                  className={tw('primary-btn full-width justify-center')}
-                  disabled={isSubmitting}
-                >
+                </Field>
+                <button type="submit" disabled={isSubmitting} className={`${ui.btnPrimary} w-full`}>
                   {isSubmitting
-                    ? 'Please wait...'
+                    ? 'Please wait…'
                     : activeTab === 'login'
                       ? 'Login'
-                      : 'Create Account'}
+                      : 'Create account'}
                 </button>
               </form>
             </>
           )}
         </div>
 
-        <div className={tw('account-card account-info')}>
-          <span className={tw('section-label')}>Customer Access</span>
-          <h3>Everything you need after purchase</h3>
-          <ul>
-            <li>Wishlist saved for future picks</li>
-            <li>Order history and delivery tracking</li>
-            <li>Saved addresses and secure checkout</li>
-            <li>Easy returns and support requests</li>
+        <div className="rounded-2xl bg-[#efe7d5] p-6 sm:p-8">
+          <span className={ui.eyebrow}>Customer access</span>
+          <h2 className={`mt-2 ${ui.h2}`}>Everything you need after purchase</h2>
+          <ul className="mt-6 space-y-3">
+            {perks.map((perk) => (
+              <li key={perk} className="flex items-start gap-3 text-sm text-[#493b32]">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#2c1e19] text-white">
+                  <Check size={12} strokeWidth={3} />
+                </span>
+                {perk}
+              </li>
+            ))}
           </ul>
         </div>
       </div>
@@ -1484,70 +2002,97 @@ function AccountPage() {
   )
 }
 
-function AdminPage({ products, onAddProduct, onUpdateProduct, onDeleteProduct }) {
-  const emptyForm = {
-    id: '',
-    name: '',
-    category: 'Silk Sarees',
-    fabric: 'Silk',
-    price: 2999,
-    discountedPrice: 2499,
-    discount: 16,
-    stock: 10,
-    rating: 4.5,
-    reviews: 0,
-    badge: 'New',
-    color: 'Ivory',
-    colors: 'Ivory, Rose, Gold',
-    occasion: 'Festive',
-    material: 'Silk',
-    length: '5.5 meters',
-    blouse: 'Included',
-    care: 'Dry clean preferred.',
-    description: '',
-    images: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1200&q=80',
+/* ------------------------------------------------------------------ */
+/* Admin                                                              */
+/* ------------------------------------------------------------------ */
+
+const DEFAULT_IMAGE_LIST = FALLBACK_IMAGE
+const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME?.trim()
+const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET?.trim()
+
+const EMPTY_PRODUCT_FORM = {
+  id: '',
+  name: '',
+  category: 'Silk Sarees',
+  fabric: 'Silk',
+  price: 2999,
+  discountedPrice: 2499,
+  discount: 16,
+  stock: 10,
+  rating: 4.5,
+  reviews: 0,
+  badge: 'New',
+  color: 'Ivory',
+  colors: 'Ivory, Rose, Gold',
+  occasion: 'Festive',
+  material: 'Silk',
+  length: '5.5 meters',
+  blouse: 'Included',
+  care: 'Dry clean preferred.',
+  description: '',
+  images: DEFAULT_IMAGE_LIST,
+}
+
+const splitList = (value) =>
+  String(value || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+
+const uploadProductImage = async (file) => {
+  if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
+    throw new Error('Cloudinary is not configured. Check the Cloudinary values in .env and restart the app.')
   }
 
-  const [form, setForm] = useState(emptyForm)
+  const body = new FormData()
+  body.append('file', file)
+  body.append('upload_preset', CLOUDINARY_UPLOAD_PRESET)
+
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+    { method: 'POST', body },
+  )
+  const result = await response.json()
+
+  if (!response.ok) {
+    throw new Error(result.error?.message || 'Cloudinary could not upload this image.')
+  }
+  if (!result.secure_url) {
+    throw new Error('Cloudinary did not return a secure image URL.')
+  }
+
+  return result.secure_url
+}
+
+function normalizeProduct(raw) {
+  const colors = splitList(raw.colors)
+  const images = splitList(raw.images)
+  const colorList = colors.length ? colors : [raw.color || 'Classic'].filter(Boolean)
+
+  return {
+    ...raw,
+    id: raw.id || raw.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+    price: Number(raw.price) || 0,
+    discountedPrice: Number(raw.discountedPrice) || Number(raw.price) || 0,
+    discount: Number(raw.discount) || 0,
+    stock: Number(raw.stock) || 0,
+    rating: Number(raw.rating) || 0,
+    reviews: Number(raw.reviews) || 0,
+    colors: colorList,
+    images: images.length ? images : [FALLBACK_IMAGE],
+    color: raw.color || colorList[0] || 'Classic',
+  }
+}
+
+function AdminPage({ products, onAddProduct, onUpdateProduct, onDeleteProduct }) {
+  const [form, setForm] = useState(EMPTY_PRODUCT_FORM)
   const [editingId, setEditingId] = useState(null)
+  const [isUploadingImages, setIsUploadingImages] = useState(false)
+  const [imageUploadError, setImageUploadError] = useState('')
 
   const resetForm = () => {
-    setForm(emptyForm)
+    setForm(EMPTY_PRODUCT_FORM)
     setEditingId(null)
-  }
-
-  const normalizeProduct = (rawProduct) => {
-    const colors = rawProduct.colors
-      ? rawProduct.colors
-          .split(',')
-          .map((entry) => entry.trim())
-          .filter(Boolean)
-      : [rawProduct.color].filter(Boolean)
-
-    const images = rawProduct.images
-      ? rawProduct.images
-          .split(',')
-          .map((entry) => entry.trim())
-          .filter(Boolean)
-      : [
-          'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1200&q=80',
-        ]
-
-    return {
-      ...rawProduct,
-      id: rawProduct.id || rawProduct.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-      price: Number(rawProduct.price) || 0,
-      discountedPrice: Number(rawProduct.discountedPrice) || Number(rawProduct.price) || 0,
-      discount: Number(rawProduct.discount) || 0,
-      stock: Number(rawProduct.stock) || 0,
-      rating: Number(rawProduct.rating) || 0,
-      reviews: Number(rawProduct.reviews) || 0,
-      colors: colors.length ? colors : [rawProduct.color || 'Classic'],
-      images: images.length ? images : [
-        'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1200&q=80',
-      ],
-      color: rawProduct.color || colors[0] || 'Classic',
-    }
   }
 
   const handleInputChange = (event) => {
@@ -1555,16 +2100,41 @@ function AdminPage({ products, onAddProduct, onUpdateProduct, onDeleteProduct })
     setForm((current) => ({ ...current, [name]: value }))
   }
 
+  const handleImageUpload = async (event) => {
+    const input = event.currentTarget
+    const files = Array.from(input.files || [])
+    if (!files.length) return
+
+    setImageUploadError('')
+    setIsUploadingImages(true)
+    try {
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) {
+          throw new Error(`${file.name} is not an image file.`)
+        }
+
+        const imageUrl = await uploadProductImage(file)
+        setForm((current) => ({
+          ...current,
+          images: [...splitList(current.images), imageUrl].join(', '),
+        }))
+      }
+    } catch (error) {
+      setImageUploadError(
+        error instanceof Error ? error.message : 'Image upload failed. Please try again.',
+      )
+    } finally {
+      setIsUploadingImages(false)
+      input.value = ''
+    }
+  }
+
   const handleSubmit = (event) => {
     event.preventDefault()
+    const normalized = normalizeProduct(form)
 
-    const normalizedProduct = normalizeProduct(form)
-
-    if (editingId) {
-      onUpdateProduct(editingId, normalizedProduct)
-    } else {
-      onAddProduct(normalizedProduct)
-    }
+    if (editingId) onUpdateProduct(editingId, normalized)
+    else onAddProduct(normalized)
 
     resetForm()
   }
@@ -1583,150 +2153,153 @@ function AdminPage({ products, onAddProduct, onUpdateProduct, onDeleteProduct })
     if (editingId === productId) resetForm()
   }
 
+  const totalStock = products.reduce((sum, item) => sum + item.stock, 0)
+  const avgRating = (products.reduce((sum, item) => sum + item.rating, 0) / (products.length || 1)).toFixed(1)
+
+  const metrics = [
+    { label: 'Total products', value: products.length },
+    { label: 'Units in stock', value: totalStock },
+    { label: 'Avg rating', value: avgRating },
+    { label: 'Featured', value: products[0]?.name?.split(' ')[0] || 'New' },
+  ]
+
+  const fields = [
+    { name: 'name', label: 'Product name', placeholder: 'Royal silk saree', span: 'full' },
+    { name: 'category', label: 'Category' },
+    { name: 'fabric', label: 'Fabric' },
+    { name: 'occasion', label: 'Occasion' },
+    { name: 'price', label: 'MRP', type: 'number' },
+    { name: 'discountedPrice', label: 'Selling price', type: 'number' },
+    { name: 'discount', label: 'Discount %', type: 'number' },
+    { name: 'stock', label: 'Stock', type: 'number' },
+    { name: 'rating', label: 'Rating', type: 'number', step: '0.1' },
+    { name: 'reviews', label: 'Reviews', type: 'number' },
+    { name: 'colors', label: 'Colors (comma separated)', span: 'full' },
+    { name: 'color', label: 'Primary color' },
+    { name: 'material', label: 'Material' },
+    { name: 'length', label: 'Length' },
+    { name: 'blouse', label: 'Blouse' },
+    { name: 'images', label: 'Image URLs (comma separated)', span: 'full', textarea: true, rows: 3 },
+    { name: 'description', label: 'Description', span: 'full', textarea: true, rows: 4 },
+    { name: 'care', label: 'Care instructions', span: 'full' },
+  ]
+
   return (
-    <section className={tw('section-wrap')}>
-      <div className={tw('container admin-layout')}>
-        <div className={tw('admin-header')}>
+    <section className={ui.section}>
+      <div className={`${ui.container} space-y-6`}>
+        <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <span className={tw('section-label')}>Admin Dashboard</span>
-            <h2 className={tw('section-title')}>Luxury Brand Inventory</h2>
+            <span className={ui.eyebrow}>Admin dashboard</span>
+            <h1 className={`mt-2 ${ui.h2}`}>Inventory</h1>
           </div>
-          <button type="button" className={tw('secondary-btn')} onClick={resetForm}>Reset Form</button>
+          <button type="button" onClick={resetForm} disabled={isUploadingImages} className={ui.btnSecondary}>
+            Reset form
+          </button>
         </div>
 
-        <div className={tw('admin-metrics')}>
-          <div className={tw('metric-card')}>
-            <span>Total Products</span>
-            <strong>{products.length}</strong>
-          </div>
-          <div className={tw('metric-card')}>
-            <span>Featured Stock</span>
-            <strong>{products.reduce((sum, item) => sum + item.stock, 0)}</strong>
-          </div>
-          <div className={tw('metric-card')}>
-            <span>Avg Rating</span>
-            <strong>{(products.reduce((sum, item) => sum + item.rating, 0) / (products.length || 1)).toFixed(1)}</strong>
-          </div>
-          <div className={tw('metric-card')}>
-            <span>Best Seller</span>
-            <strong>{products[0]?.name?.split(' ')[0] || 'New'}</strong>
-          </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {metrics.map((metric) => (
+            <div key={metric.label} className={`${ui.card} p-4`}>
+              <span className="text-xs text-[#817970]">{metric.label}</span>
+              <strong className="mt-1 block text-2xl font-semibold text-[#2c1e19]">{metric.value}</strong>
+            </div>
+          ))}
         </div>
 
-        <div className={tw('admin-panels')}>
-          <div className={tw('admin-card')}>
-            <h3>{editingId ? 'Edit Product' : 'Add New Product'}</h3>
-            <form className={tw('account-form')} onSubmit={handleSubmit}>
-              <div className={tw('field-grid two-columns')}>
-                <div className={tw('field')}>
-                  <label htmlFor="name">Product Name</label>
-                  <input className={tw('form-control')} id="name" name="name" value={form.name} onChange={handleInputChange} placeholder="Royal Silk Saree" required />
-                </div>
-                <div className={tw('field')}>
-                  <label htmlFor="category">Category</label>
-                  <input className={tw('form-control')} id="category" name="category" value={form.category} onChange={handleInputChange} required />
-                </div>
-                <div className={tw('field')}>
-                  <label htmlFor="fabric">Fabric</label>
-                  <input className={tw('form-control')} id="fabric" name="fabric" value={form.fabric} onChange={handleInputChange} required />
-                </div>
-                <div className={tw('field')}>
-                  <label htmlFor="occasion">Occasion</label>
-                  <input className={tw('form-control')} id="occasion" name="occasion" value={form.occasion} onChange={handleInputChange} required />
-                </div>
-                <div className={tw('field')}>
-                  <label htmlFor="price">Price</label>
-                  <input className={tw('form-control')} id="price" name="price" type="number" value={form.price} onChange={handleInputChange} required />
-                </div>
-                <div className={tw('field')}>
-                  <label htmlFor="discountedPrice">Selling Price</label>
-                  <input className={tw('form-control')} id="discountedPrice" name="discountedPrice" type="number" value={form.discountedPrice} onChange={handleInputChange} required />
-                </div>
-                <div className={tw('field')}>
-                  <label htmlFor="discount">Discount %</label>
-                  <input className={tw('form-control')} id="discount" name="discount" type="number" value={form.discount} onChange={handleInputChange} />
-                </div>
-                <div className={tw('field')}>
-                  <label htmlFor="stock">Stock</label>
-                  <input className={tw('form-control')} id="stock" name="stock" type="number" value={form.stock} onChange={handleInputChange} required />
-                </div>
-                <div className={tw('field')}>
-                  <label htmlFor="rating">Rating</label>
-                  <input className={tw('form-control')} id="rating" name="rating" type="number" step="0.1" value={form.rating} onChange={handleInputChange} required />
-                </div>
-                <div className={tw('field')}>
-                  <label htmlFor="reviews">Reviews</label>
-                  <input className={tw('form-control')} id="reviews" name="reviews" type="number" value={form.reviews} onChange={handleInputChange} required />
-                </div>
-                <div className={tw('field full-span')}>
-                  <label htmlFor="colors">Colors (comma separated)</label>
-                  <input className={tw('form-control')} id="colors" name="colors" value={form.colors} onChange={handleInputChange} required />
-                </div>
-                <div className={tw('field')}>
-                  <label htmlFor="color">Primary Color</label>
-                  <input className={tw('form-control')} id="color" name="color" value={form.color} onChange={handleInputChange} required />
-                </div>
-                <div className={tw('field')}>
-                  <label htmlFor="material">Material</label>
-                  <input className={tw('form-control')} id="material" name="material" value={form.material} onChange={handleInputChange} required />
-                </div>
-                <div className={tw('field')}>
-                  <label htmlFor="length">Length</label>
-                  <input className={tw('form-control')} id="length" name="length" value={form.length} onChange={handleInputChange} required />
-                </div>
-                <div className={tw('field')}>
-                  <label htmlFor="blouse">Blouse</label>
-                  <input className={tw('form-control')} id="blouse" name="blouse" value={form.blouse} onChange={handleInputChange} required />
-                </div>
-                <div className={tw('field full-span')}>
-                  <label htmlFor="images">Image URLs (comma separated)</label>
-                  <textarea className={tw('form-control')} id="images" name="images" value={form.images} onChange={handleInputChange} rows="3" required />
-                </div>
-                <div className={tw('field full-span')}>
-                  <label htmlFor="description">Description</label>
-                  <textarea className={tw('form-control')} id="description" name="description" value={form.description} onChange={handleInputChange} rows="4" required />
-                </div>
-                <div className={tw('field full-span')}>
-                  <label htmlFor="care">Care Instructions</label>
-                  <input className={tw('form-control')} id="care" name="care" value={form.care} onChange={handleInputChange} required />
-                </div>
-              </div>
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)]">
+          <div className={`${ui.card} ${ui.cardPad}`}>
+            <h2 className={ui.h3}>{editingId ? 'Edit product' : 'Add new product'}</h2>
+            <form className="mt-5 grid gap-4 sm:grid-cols-2" onSubmit={handleSubmit}>
+              {fields.map((field) => {
+                const spanClass = field.span === 'full' ? 'sm:col-span-2' : ''
+                const common = {
+                  id: field.name,
+                  name: field.name,
+                  value: form[field.name],
+                  onChange: handleInputChange,
+                  required: true,
+                  className: ui.input,
+                }
+                return (
+                  <Field key={field.name} label={field.label} className={spanClass}>
+                    {field.name === 'images' ? (
+                      <>
+                        <textarea {...common} rows={field.rows} />
+                        <label className={`${ui.btnSecondary} mt-3 w-fit cursor-pointer`}>
+                          {isUploadingImages ? 'Uploading images…' : 'Upload images to Cloudinary'}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            disabled={isUploadingImages}
+                            onChange={handleImageUpload}
+                            className="sr-only"
+                          />
+                        </label>
+                        <p className="mt-2 text-xs text-[#817970]">
+                          Uploaded image URLs will be added above. Save the product to keep them.
+                        </p>
+                        {imageUploadError && (
+                          <p role="alert" className={`mt-2 ${ui.alertError}`}>{imageUploadError}</p>
+                        )}
+                      </>
+                    ) : field.textarea ? (
+                      <textarea {...common} rows={field.rows} />
+                    ) : (
+                      <input {...common} type={field.type || 'text'} step={field.step} placeholder={field.placeholder} />
+                    )}
+                  </Field>
+                )
+              })}
 
-              <div className={tw('purchase-row mt-4')}>
-                <button type="submit" className={tw('primary-btn')}>
-                  {editingId ? 'Update Product' : 'Add Product'}
+              <div className="flex flex-wrap gap-3 sm:col-span-2">
+                <button type="submit" disabled={isUploadingImages} className={ui.btnPrimary}>
+                  {isUploadingImages
+                    ? 'Uploading images…'
+                    : editingId
+                      ? 'Update product'
+                      : 'Add product'}
                 </button>
                 {editingId && (
-                  <button type="button" className={tw('secondary-btn')} onClick={resetForm}>Cancel</button>
+                  <button type="button" onClick={resetForm} className={ui.btnSecondary}>
+                    Cancel
+                  </button>
                 )}
               </div>
             </form>
           </div>
 
-          <div className={tw('admin-card')}>
-            <h3>Current Inventory</h3>
-            <div className={tw('admin-product-list')}>
+          <div className={`${ui.card} ${ui.cardPad}`}>
+            <h2 className={ui.h3}>Current inventory</h2>
+            <ul className="mt-4 space-y-3">
               {products.map((product) => (
-                <div key={product.id} className={tw('admin-product-item')}>
-                  <div className={tw('admin-product-top')}>
-                    <div>
-                      <strong>{product.name}</strong>
-                      <div className={tw('admin-product-meta')}>
+                <li key={product.id} className="rounded-xl border border-[#e2d9c5] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <strong className="block truncate text-sm text-[#2c1e19]">{product.name}</strong>
+                      <div className="mt-1.5 flex flex-wrap gap-3 text-xs text-[#817970]">
                         <span>{product.category}</span>
                         <span>{product.stock} in stock</span>
                       </div>
                     </div>
-                    <span className={tw('discount-tag')}>â‚¹{product.discountedPrice}</span>
+                    <span className={ui.badge}>{formatPrice(product.discountedPrice)}</span>
                   </div>
-                  <div className={tw('admin-product-actions')}>
-                    <button type="button" className={tw('secondary-btn')} onClick={() => handleEdit(product)}>Edit</button>
-                    <button type="button" className={tw('icon-button')} onClick={() => handleDelete(product.id)} aria-label={`Delete ${product.name}`}>
+                  <div className="mt-3 flex items-center gap-2">
+                    <button type="button" onClick={() => handleEdit(product)} className={ui.btnGhost}>
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(product.id)}
+                      aria-label={`Delete ${product.name}`}
+                      className="flex h-10 w-10 items-center justify-center rounded-full text-[#493b32] transition hover:bg-[#f3e7e5] hover:text-[#a23b36]"
+                    >
                       <Trash2 size={16} />
                     </button>
                   </div>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
         </div>
       </div>
@@ -1734,19 +2307,18 @@ function AdminPage({ products, onAddProduct, onUpdateProduct, onDeleteProduct })
   )
 }
 
+/* ------------------------------------------------------------------ */
+/* 404                                                                */
+/* ------------------------------------------------------------------ */
+
 function NotFound() {
   return (
-    <section className={tw('section-wrap')}>
-      <div className={tw('container empty-state large-empty')}>
-        <Search size={42} />
-        <h2>Nothing found here</h2>
-        <p>The page you are looking for is unavailable.</p>
-        <Link to="/shop" className={tw('primary-btn')}>
-          Explore Sarees
-          <ArrowRight size={18} />
-        </Link>
-      </div>
-    </section>
+    <EmptyState
+      icon={Search}
+      title="Nothing found here"
+      description="The page you are looking for is unavailable."
+      actionLabel="Explore sarees"
+    />
   )
 }
 
