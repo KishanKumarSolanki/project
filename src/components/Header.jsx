@@ -104,6 +104,13 @@ function Header({ cartCount, wishlist }) {
           </nav>
 
           <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-4">
+            <Link
+              to="/account"
+              className="hidden min-h-10 items-center gap-2 rounded-full border border-[#ded5c3] px-4 text-sm font-semibold text-[#493b32] transition hover:border-[#b88a3e] hover:bg-[#fffdf7] hover:text-[#85642e] md:inline-flex"
+            >
+              <UserRound size={18} strokeWidth={1.8} />
+              Login
+            </Link>
             <Link to="/wishlist" className="relative inline-flex h-10 w-10 items-center justify-center rounded-full text-[#493b32] transition hover:bg-[#eee7d7]" aria-label="Wishlist">
               <Heart size={26} strokeWidth={1.8} />
               {wishlist.length > 0 && <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#b88a3e] px-1 text-[10px] text-white">{wishlist.length}</span>}

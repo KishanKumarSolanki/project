@@ -1,9 +1,8 @@
 import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { categories } from '../../data/products'
 import ImageWithFallback from '../ImageWithFallback'
 
-function CategorySection() {
+function CategorySection({ categories }) {
   return (
     <section className="py-9 sm:py-16" id="collections">
       <div className="mx-auto max-w-7xl px-4 sm:px-7">

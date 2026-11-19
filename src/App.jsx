@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import {
   BrowserRouter,
   Link,
@@ -17,7 +17,6 @@ import {
   Plus,
   Search,
   ShoppingBag,
-  Star,
   Trash2,
   X,
 } from 'lucide-react'
@@ -30,13 +29,19 @@ import {
   signOut,
   updateProfile,
 } from 'firebase/auth'
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore'
-import { products } from './data/products'
-import { shopTabs } from './data/shopCollections'
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+} from 'firebase/firestore'
 import { auth, db } from './firebase'
 import Footer from './components/Footer'
 import Header from './components/Header'
-import ProductCard from './components/ProductCard'
+import ProductDetail from './components/ProductDetail'
 import WishlistProductCard from './components/WishlistProductCard'
 import ImageWithFallback from './components/ImageWithFallback'
 import MobileBottomNav from './components/MobileBottomNav'
@@ -47,29 +52,19 @@ import BestSellersSection from './components/home/BestSellersSection'
 import CategorySection from './components/home/CategorySection'
 import HeroSection from './components/home/HeroSection'
 import NewArrivalsSection from './components/home/NewArrivalsSection'
-import PromoBannerSection from './components/home/PromoBannerSection'
 import StorySection from './components/home/StorySection'
 import TestimonialsSection from './components/home/TestimonialsSection'
 import { formatPrice } from './utils/formatPrice'
+
+const AdminPage = lazy(() => import('./components/admin/AdminPage'))
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const PRODUCT_STORAGE_KEY = 'ananyaCatalog'
 const CART_STORAGE_KEY = 'sareeCart'
 const WISHLIST_STORAGE_KEY = 'sareeWishlist'
 const ORDERS_STORAGE_KEY = 'ananyaOrders'
-const SEED_PREFIX = 'ananyaCatalog'
-const SEED_PRODUCT_IDS = [
-  'floral-printed-pure-linen-saree',
-  'munga-mashru-pure-silk-saree',
-  'linen-cotton-block-printed-saree',
-  'navy-blue-pure-linen-saree',
-]
-const SERVICEABLE_PINCODES = ['110001', '400001', '560001', '700001', '600001']
-const FALLBACK_IMAGE =
-  'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1200&q=80'
 const SHIPPING_THRESHOLD = 1499
 const SHIPPING_FEE = 199
 const DISCOUNT_RATE = 0.12
@@ -165,13 +160,62 @@ const writeStorage = (key, value) => {
   }
 }
 
-const getStoredProducts = () => {
-  const saved = readStorage(PRODUCT_STORAGE_KEY, null)
-  return Array.isArray(saved) && saved.length > 0 ? saved : products
-}
-
 const getAuthErrorMessage = (error) =>
   AUTH_ERROR_MESSAGES[error?.code] || 'Unable to authenticate. Please try again.'
+
+const wasCreatedInAdmin = (data) => Boolean(data.createdAt && data.updatedAt)
+
+const normalizeFirestoreProduct = (snapshot) => {
+  const data = snapshot.data()
+  const normalizeList = (value) =>
+    Array.isArray(value)
+      ? value.filter((item) => typeof item === 'string' && item.trim())
+      : typeof value === 'string'
+        ? value.split(',').map((item) => item.trim()).filter(Boolean)
+        : []
+  const colors = normalizeList(data.colors)
+  const images = normalizeList(data.images)
+  const singleImage = data.image || ''
+
+  return {
+    ...data,
+    id: snapshot.id,
+    name: data.name || 'Untitled product',
+    category: data.category || 'Uncategorized',
+    fabric: data.fabric || data.material || '',
+    price: Number(data.price) || 0,
+    discountedPrice: Number(data.discountedPrice ?? data.price) || 0,
+    discount: Number(data.discount) || 0,
+    stock: Number(data.stock) || 0,
+    rating: Number(data.rating) || 0,
+    reviews: Number(data.reviews) || 0,
+    colors: colors.length ? colors : [data.color || 'Classic'],
+    showOnStorefront:
+      typeof data.showOnStorefront === 'boolean'
+        ? data.showOnStorefront
+        : wasCreatedInAdmin(data),
+    images: images.length
+      ? images
+      : singleImage
+        ? [singleImage]
+        : [],
+  }
+}
+
+const normalizeFirestoreCategory = (snapshot) => {
+  const data = snapshot.data()
+  return {
+    ...data,
+    id: snapshot.id,
+    name: data.name || data.title || snapshot.id,
+    image: data.image || data.imageUrl || '',
+    accent: data.accent || data.description || '',
+    showOnStorefront:
+      typeof data.showOnStorefront === 'boolean'
+        ? data.showOnStorefront
+        : wasCreatedInAdmin(data),
+  }
+}
 
 const getAddressKey = (address) =>
   [address.street, address.city, address.state, address.zip, address.country]
@@ -325,18 +369,6 @@ function OptionCard({ name, value, description, checked, onChange }) {
   )
 }
 
-function SectionHeading({ eyebrow, title, action }) {
-  return (
-    <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-      <div>
-        {eyebrow && <span className={ui.eyebrow}>{eyebrow}</span>}
-        <h2 className={`mt-2 ${ui.h2}`}>{title}</h2>
-      </div>
-      {action}
-    </div>
-  )
-}
-
 function EmptyState({ icon: Icon, title, description, actionLabel = 'Explore Sarees', actionTo = '/shop' }) {
   return (
     <section className={ui.section}>
@@ -357,6 +389,25 @@ function EmptyState({ icon: Icon, title, description, actionLabel = 'Explore Sar
   )
 }
 
+function AppFrame({ children, cartCount, wishlistCount }) {
+  const { pathname } = useLocation()
+  const isAdminPage = pathname === '/admin'
+
+  return (
+    <div className={isAdminPage ? 'min-h-screen bg-[#f4f2ed]' : ui.page}>
+      {!isAdminPage && <Header cartCount={cartCount} wishlist={wishlistCount} />}
+      <main>{children}</main>
+      {!isAdminPage && (
+        <>
+          <Footer />
+          <SupportBubble />
+          <MobileBottomNav cartCount={cartCount} wishlistCount={wishlistCount} />
+        </>
+      )}
+    </div>
+  )
+}
+
 /* ------------------------------------------------------------------ */
 /* App shell                                                          */
 /* ------------------------------------------------------------------ */
@@ -364,9 +415,13 @@ function EmptyState({ icon: Icon, title, description, actionLabel = 'Explore Sar
 function App() {
   const [cart, setCart] = useState(() => readStorage(CART_STORAGE_KEY, []))
   const [wishlist, setWishlist] = useState(() => readStorage(WISHLIST_STORAGE_KEY, []))
-  const [catalog, setCatalog] = useState(getStoredProducts)
+  const [catalog, setCatalog] = useState([])
+  const [categories, setCategories] = useState([])
+  const [catalogError, setCatalogError] = useState('')
   const [firebaseUser, setFirebaseUser] = useState(auth.currentUser)
-  const [authReady, setAuthReady] = useState(Boolean(auth.currentUser))
+  const [authReady, setAuthReady] = useState(false)
+  const [adminRole, setAdminRole] = useState(auth.currentUser ? 'checking' : 'signed-out')
+  const [adminRoleError, setAdminRoleError] = useState('')
   const [showLoginPrompt, setShowLoginPrompt] = useState(false)
   const [loginMode, setLoginMode] = useState('login')
   const [loginForm, setLoginForm] = useState({ fullName: '', email: '', password: '' })
@@ -376,15 +431,69 @@ function App() {
 
   useEffect(() => writeStorage(CART_STORAGE_KEY, cart), [cart])
   useEffect(() => writeStorage(WISHLIST_STORAGE_KEY, wishlist), [wishlist])
-  useEffect(() => writeStorage(PRODUCT_STORAGE_KEY, catalog), [catalog])
 
   useEffect(() => onAuthStateChanged(auth, (currentUser) => {
     setFirebaseUser(currentUser)
     setAuthReady(true)
+    setAdminRole(currentUser ? 'checking' : 'signed-out')
+    setAdminRoleError('')
     if (currentUser) {
       setShowLoginPrompt(false)
     }
   }), [])
+
+  useEffect(() => {
+    let active = true
+    const unsubscribeProducts = onSnapshot(
+      collection(db, 'products'),
+      (snapshot) => {
+        setCatalog(snapshot.docs.map(normalizeFirestoreProduct))
+        setCatalogError('')
+      },
+      (error) => {
+        setCatalogError(`Products could not be loaded from Firebase: ${error.message}`)
+      },
+    )
+    const unsubscribeCategories = onSnapshot(
+      collection(db, 'categories'),
+      (snapshot) => {
+        const cloudCategories = snapshot.docs
+          .map(normalizeFirestoreCategory)
+          .sort((first, second) =>
+            (second.createdAt?.toMillis?.() || 0) - (first.createdAt?.toMillis?.() || 0),
+          )
+        if (active) setCategories(cloudCategories)
+      },
+      (error) => {
+        if (active) setCatalogError(`Categories could not be loaded from Firebase: ${error.message}`)
+      },
+    )
+
+    return () => {
+      active = false
+      unsubscribeProducts()
+      unsubscribeCategories()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!firebaseUser) return undefined
+    return onSnapshot(
+      doc(db, 'users', firebaseUser.uid),
+      (snapshot) => {
+        setAdminRole(snapshot.data()?.role === 'admin' ? 'admin' : 'denied')
+        setAdminRoleError('')
+      },
+      (error) => {
+        setAdminRole('denied')
+        setAdminRoleError(
+          error.code === 'permission-denied'
+            ? 'Firebase rules blocked your role check. Allow users to read their own profile document.'
+            : `Could not verify the administrator role: ${error.message}`,
+        )
+      },
+    )
+  }, [firebaseUser])
 
   useEffect(() => {
     if (!showLoginPrompt) return undefined
@@ -396,33 +505,75 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [showLoginPrompt])
 
-  // One-time seeding of newer catalog items for returning visitors.
-  useEffect(() => {
-    SEED_PRODUCT_IDS.forEach((productId) => {
-      const flagKey = `${SEED_PREFIX}${productId}Seeded`
-      if (window.localStorage.getItem(flagKey) === 'true') return
-
-      const seedProduct = products.find((product) => product.id === productId)
-      if (seedProduct) {
-        setCatalog((current) =>
-          current.some((product) => product.id === productId) ? current : [seedProduct, ...current],
-        )
-      }
-      window.localStorage.setItem(flagKey, 'true')
-    })
-  }, [])
-
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0)
 
-  const handleAddProduct = (product) => setCatalog((current) => [product, ...current])
+  const handleAddProduct = async (product) => {
+    const productRef = doc(collection(db, 'products'))
+    await setDoc(productRef, {
+      ...product,
+      id: productRef.id,
+      showOnStorefront: product.showOnStorefront === true,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  }
 
-  const handleUpdateProduct = (productId, updatedProduct) =>
-    setCatalog((current) =>
-      current.map((item) => (item.id === productId ? { ...item, ...updatedProduct } : item)),
+  const handleUpdateProduct = async (productId, updatedProduct) =>
+    setDoc(
+      doc(db, 'products', productId),
+      { ...updatedProduct, id: productId, updatedAt: serverTimestamp() },
+      { merge: true },
     )
 
-  const handleDeleteProduct = (productId) =>
-    setCatalog((current) => current.filter((item) => item.id !== productId))
+  const handleDeleteProduct = async (productId) =>
+    deleteDoc(doc(db, 'products', productId))
+
+  const handleAddCategory = async (category) => {
+    if (categories.some((item) => item.name.trim().toLowerCase() === category.name.trim().toLowerCase())) {
+      throw new Error('A category with this name already exists.')
+    }
+    const categoryRef = doc(collection(db, 'categories'))
+    await setDoc(categoryRef, {
+      ...category,
+      name: category.name.trim(),
+      id: categoryRef.id,
+      showOnStorefront: true,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  }
+
+  const handleUpdateCategory = async (categoryId, updatedCategory) => {
+    if (
+      categories.some(
+        (item) =>
+          item.id !== categoryId &&
+          item.name.trim().toLowerCase() === updatedCategory.name.trim().toLowerCase(),
+      )
+    ) {
+      throw new Error('A category with this name already exists.')
+    }
+
+    await setDoc(
+      doc(db, 'categories', categoryId),
+      { ...updatedCategory, id: categoryId, name: updatedCategory.name.trim(), updatedAt: serverTimestamp() },
+      { merge: true },
+    )
+  }
+
+  const handleDeleteCategory = async (categoryId) =>
+    deleteDoc(doc(db, 'categories', categoryId))
+
+  const handleSetCategoryVisibility = async (categoryId, showOnStorefront) =>
+    setDoc(doc(db, 'categories', categoryId), { showOnStorefront }, { merge: true })
+
+  const handleAdminSignOut = async () => {
+    try {
+      await signOut(auth)
+    } catch (error) {
+      setAdminRoleError(`Could not sign out: ${getAuthErrorMessage(error)}`)
+    }
+  }
 
   const addToCart = (product, quantity = 1, variant = product.colors?.[0] ?? 'Classic') => {
     if (!product || product.stock < 1) return
@@ -513,13 +664,13 @@ function App() {
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const shipping = subtotal > SHIPPING_THRESHOLD ? 0 : cart.length ? SHIPPING_FEE : 0
   const discount = subtotal * DISCOUNT_RATE
+  const storefrontProducts = catalog.filter((product) => product.showOnStorefront)
+  const storefrontCategories = categories.filter((category) => category.showOnStorefront)
 
   return (
     <BrowserRouter>
       <ScrollToTop />
-      <div className={ui.page}>
-        <Header cartCount={cartCount} wishlist={wishlist} />
-        <main>
+      <AppFrame cartCount={cartCount} wishlistCount={wishlist.length}>
           <Routes>
             <Route
               path="/"
@@ -528,7 +679,8 @@ function App() {
                   addToCart={addToCart}
                   toggleWishlist={toggleWishlist}
                   wishlist={wishlist}
-                  products={catalog}
+                  products={storefrontProducts}
+                  categories={storefrontCategories}
                 />
               }
             />
@@ -536,10 +688,10 @@ function App() {
               path="/shop"
               element={
                 <ShopPage
-                  addToCart={addToCart}
                   toggleWishlist={toggleWishlist}
                   wishlist={wishlist}
-                  products={catalog}
+                  products={storefrontProducts}
+                  categories={storefrontCategories}
                 />
               }
             />
@@ -550,7 +702,7 @@ function App() {
                   addToCart={addToCart}
                   toggleWishlist={toggleWishlist}
                   wishlist={wishlist}
-                  products={catalog}
+                  products={storefrontProducts}
                 />
               }
             />
@@ -571,7 +723,7 @@ function App() {
               path="/wishlist"
               element={
                 <WishlistPage
-                  products={catalog.filter((product) => wishlist.includes(product.id))}
+                  products={storefrontProducts.filter((product) => wishlist.includes(product.id))}
                   toggleWishlist={toggleWishlist}
                 />
               }
@@ -599,20 +751,29 @@ function App() {
             <Route
               path="/admin"
               element={
-                <AdminPage
-                  products={catalog}
-                  onAddProduct={handleAddProduct}
-                  onUpdateProduct={handleUpdateProduct}
-                  onDeleteProduct={handleDeleteProduct}
-                />
+                <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[#f4f2ed] text-sm text-[#81796e]">Opening admin workspace…</div>}>
+                  <AdminPage
+                    user={firebaseUser}
+                    authReady={authReady}
+                    adminRole={adminRole}
+                    adminRoleError={adminRoleError}
+                    products={catalog}
+                    categories={categories}
+                    catalogError={catalogError}
+                    onAddProduct={handleAddProduct}
+                    onUpdateProduct={handleUpdateProduct}
+                    onDeleteProduct={handleDeleteProduct}
+                    onAddCategory={handleAddCategory}
+                    onUpdateCategory={handleUpdateCategory}
+                    onDeleteCategory={handleDeleteCategory}
+                    onSetCategoryVisibility={handleSetCategoryVisibility}
+                    onSignOut={handleAdminSignOut}
+                  />
+                </Suspense>
               }
             />
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </main>
-        <Footer />
-        <SupportBubble />
-        <MobileBottomNav cartCount={cartCount} wishlistCount={wishlist.length} />
         {showLoginPrompt && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-[#2c1e19]/55 px-4 py-6">
             <section
@@ -747,7 +908,7 @@ function App() {
             </section>
           </div>
         )}
-      </div>
+      </AppFrame>
     </BrowserRouter>
   )
 }
@@ -784,29 +945,32 @@ function CheckoutLoginGate({ authReady, onOpenLogin }) {
 /* Home                                                               */
 /* ------------------------------------------------------------------ */
 
-function HomePage({ addToCart, toggleWishlist, wishlist, products }) {
-  const featuredProducts = products.slice(0, 4)
-  const bestSellers = products.slice(2, 6)
+function HomePage({ addToCart, toggleWishlist, wishlist, products, categories }) {
+  const bestSellers = products.slice(0, 4)
+  const featuredProducts = products.slice(4, 8)
 
   return (
     <>
       <HeroSection />
-      <CategorySection />
-      <BestSellersSection
-        bestSellers={bestSellers}
-        addToCart={addToCart}
-        toggleWishlist={toggleWishlist}
-        wishlist={wishlist}
-      />
-      <NewArrivalsSection
-        featuredProducts={featuredProducts}
-        addToCart={addToCart}
-        toggleWishlist={toggleWishlist}
-        wishlist={wishlist}
-      />
+      {categories.length > 0 && <CategorySection categories={categories} />}
+      {bestSellers.length > 0 && (
+        <BestSellersSection
+          bestSellers={bestSellers}
+          addToCart={addToCart}
+          toggleWishlist={toggleWishlist}
+          wishlist={wishlist}
+        />
+      )}
+      {featuredProducts.length > 0 && (
+        <NewArrivalsSection
+          featuredProducts={featuredProducts}
+          addToCart={addToCart}
+          toggleWishlist={toggleWishlist}
+          wishlist={wishlist}
+        />
+      )}
       <BenefitsSection />
       <StorySection />
-      <PromoBannerSection />
       <TestimonialsSection />
     </>
   )
@@ -852,11 +1016,21 @@ function WishlistPage({ products, toggleWishlist }) {
 /* Shop                                                               */
 /* ------------------------------------------------------------------ */
 
-function ShopPage({ addToCart, toggleWishlist, wishlist, products }) {
+function ShopPage({ toggleWishlist, wishlist, products, categories }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const search = searchParams.get('search') || ''
   const selectedCategory = searchParams.get('category') || 'All'
   const maxPrice = Number(searchParams.get('maxPrice')) || 7000
+  const availableShopTabs = useMemo(() => {
+    return [
+      { name: 'All', category: 'All', productCategory: 'All' },
+      ...categories.map((category) => ({
+        name: category.name.replace(/ Sarees$/, ''),
+        category: category.name,
+        productCategory: category.name,
+      })),
+    ]
+  }, [categories])
   const [sortBy, setSortBy] = useState(() => {
     const sort = searchParams.get('sort')
     return sort === 'new' ? 'newest' : sort === 'popular' ? 'popular' : 'featured'
@@ -871,7 +1045,7 @@ function ShopPage({ addToCart, toggleWishlist, wishlist, products }) {
 
   const filteredProducts = useMemo(() => {
     const query = search.toLowerCase().trim()
-    const tab = shopTabs.find((item) => item.category === selectedCategory)
+    const tab = availableShopTabs.find((item) => item.category === selectedCategory)
     const productCategory = tab?.productCategory || selectedCategory
 
     return [...products]
@@ -895,14 +1069,14 @@ function ShopPage({ addToCart, toggleWishlist, wishlist, products }) {
         if (sortBy === 'newest') return b.discount - a.discount
         return b.rating - a.rating
       })
-  }, [products, search, selectedCategory, maxPrice, sortBy])
+  }, [products, search, selectedCategory, maxPrice, sortBy, availableShopTabs])
 
   return (
     <ShopPageContent
       filteredProducts={filteredProducts}
-      addToCart={addToCart}
       toggleWishlist={toggleWishlist}
       wishlist={wishlist}
+      shopTabs={availableShopTabs}
       selectedCategory={selectedCategory}
       setSelectedCategory={setSelectedCategory}
       sortBy={sortBy}
@@ -930,330 +1104,6 @@ function ProductPage({ addToCart, toggleWishlist, wishlist, products }) {
       toggleWishlist={toggleWishlist}
       wishlist={wishlist}
     />
-  )
-}
-
-const REVIEWS = [
-  {
-    quote: 'The drape and finish are stunning. It felt premium from the moment I unboxed it.',
-    author: 'Ankita S.',
-  },
-  {
-    quote: 'Beautiful zari work and an elegant silhouette. It is perfect for festive occasions.',
-    author: 'Neha R.',
-  },
-]
-
-function Stars({ rating, size = 14 }) {
-  return (
-    <div className="flex items-center gap-0.5">
-      {[...Array(5)].map((_, index) => (
-        <Star
-          key={index}
-          size={size}
-          fill={index < Math.round(rating) ? '#d6ae55' : '#e5e0d2'}
-          strokeWidth={1.5}
-          className={index < Math.round(rating) ? 'text-[#d6ae55]' : 'text-[#e5e0d2]'}
-        />
-      ))}
-    </div>
-  )
-}
-
-function ProductDetail({ addToCart, toggleWishlist, wishlist, products, product }) {
-  const navigate = useNavigate()
-  const [selectedImage, setSelectedImage] = useState(product.images[0])
-  const [selectedVariant, setSelectedVariant] = useState(product.colors[0] || 'Classic')
-  const [quantity, setQuantity] = useState(1)
-  const [pincode, setPincode] = useState('')
-  const [deliveryStatus, setDeliveryStatus] = useState(null)
-  const [activeTab, setActiveTab] = useState('description')
-
-  const isWishlisted = wishlist.includes(product.id)
-  const inStock = product.stock > 0
-  const recentProducts = products.filter((item) => item.id !== product.id).slice(0, 4)
-
-  const handlePincodeCheck = () => {
-    const code = pincode.trim()
-    if (!/^\d{6}$/.test(code)) {
-      setDeliveryStatus({ ok: false, text: 'Enter a valid 6-digit PIN code.' })
-      return
-    }
-    setDeliveryStatus(
-      SERVICEABLE_PINCODES.includes(code)
-        ? { ok: true, text: 'Delivery available in 4-6 business days.' }
-        : { ok: false, text: 'This PIN code is currently unavailable for delivery.' },
-    )
-  }
-
-  const specs = [
-    { label: 'Fabric', value: product.material },
-    { label: 'Saree length', value: product.length },
-    { label: 'Blouse', value: product.blouse },
-    { label: 'Care', value: product.care },
-    { label: 'Availability', value: inStock ? 'Ready to ship' : 'Pre-order' },
-  ]
-
-  const tabs = [
-    { id: 'description', label: 'Description' },
-    { id: 'specifications', label: 'Specifications' },
-    { id: 'reviews', label: 'Reviews' },
-  ]
-
-  return (
-    <section className={ui.section}>
-      <div className={ui.container}>
-        <nav aria-label="Breadcrumb" className="mb-6 flex flex-wrap items-center gap-2 text-sm text-[#817970]">
-          <Link to="/" className="hover:text-[#2c1e19]">Home</Link>
-          <span>/</span>
-          <Link to="/shop" className="hover:text-[#2c1e19]">Shop</Link>
-          <span>/</span>
-          <span className="truncate text-[#2c1e19]">{product.name}</span>
-        </nav>
-
-        <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
-          {/* Gallery */}
-          <div className="min-w-0">
-            <div className="aspect-[4/5] overflow-hidden rounded-3xl bg-[#eee7d7]">
-              <ImageWithFallback src={selectedImage} alt={product.name} className="h-full w-full object-cover" />
-            </div>
-            {product.images.length > 1 && (
-              <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
-                {product.images.map((image) => (
-                  <button
-                    key={image}
-                    type="button"
-                    onClick={() => setSelectedImage(image)}
-                    aria-label="View image"
-                    className={`h-20 w-16 shrink-0 overflow-hidden rounded-xl border-2 transition ${
-                      selectedImage === image ? 'border-[#b88a3e]' : 'border-transparent'
-                    }`}
-                  >
-                    <ImageWithFallback src={image} alt={product.name} className="h-full w-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Info */}
-          <div className="min-w-0 lg:py-2">
-            <span className={ui.eyebrow}>{product.category}</span>
-            <h1 className="mt-2 font-serif text-3xl font-semibold leading-tight tracking-tight sm:text-4xl">
-              {product.name}
-            </h1>
-
-            <div className="mt-3 flex items-center gap-2 text-sm text-[#71645b]">
-              <Stars rating={product.rating} />
-              <span>{product.rating} ({product.reviews} reviews)</span>
-            </div>
-
-            <div className="mt-5 flex flex-wrap items-baseline gap-3">
-              <span className="text-3xl font-bold text-[#2c1e19]">{formatPrice(product.discountedPrice)}</span>
-              {product.discount > 0 && (
-                <>
-                  <span className="text-base text-[#817970] line-through">{formatPrice(product.price)}</span>
-                  <span className={ui.badge}>{product.discount}% off</span>
-                </>
-              )}
-            </div>
-
-            <p className="mt-5 text-base leading-7 text-[#71645b]">{product.description}</p>
-
-            <dl className="mt-6 grid grid-cols-3 divide-x divide-[#e2d9c5] overflow-hidden rounded-2xl border border-[#e2d9c5] bg-[#fffdf7]">
-              {[
-                { label: 'Fabric', value: product.material },
-                { label: 'Length', value: product.length },
-                { label: 'Blouse', value: product.blouse },
-              ].map((item) => (
-                <div key={item.label} className="p-4">
-                  <dt className="text-xs text-[#817970]">{item.label}</dt>
-                  <dd className="mt-1 text-sm font-semibold text-[#2c1e19]">{item.value}</dd>
-                </div>
-              ))}
-            </dl>
-
-            {product.colors.length > 0 && (
-              <div className="mt-6">
-                <span className="text-sm font-medium text-[#493b32]">Color</span>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {product.colors.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => setSelectedVariant(color)}
-                      aria-pressed={selectedVariant === color}
-                      className={`rounded-full border px-4 py-2 text-sm transition ${
-                        selectedVariant === color
-                          ? 'border-[#b88a3e] bg-[#b88a3e] text-[#2c1e19]'
-                          : 'border-[#e2d9c5] text-[#71645b] hover:border-[#b88a3e]'
-                      }`}
-                    >
-                      {color}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Purchase */}
-            <div className="mt-7 flex flex-wrap items-center gap-3">
-              <div className="inline-flex min-h-12 items-center gap-4 rounded-xl border border-[#e2d9c5] bg-white px-3">
-                <button
-                  type="button"
-                  aria-label="Decrease quantity"
-                  onClick={() => setQuantity((current) => Math.max(1, current - 1))}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-[#493b32] hover:bg-[#eee7d7]"
-                >
-                  <Minus size={16} />
-                </button>
-                <span className="w-6 text-center font-semibold">{quantity}</span>
-                <button
-                  type="button"
-                  aria-label="Increase quantity"
-                  onClick={() => setQuantity((current) => Math.min(product.stock, current + 1))}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg text-[#493b32] hover:bg-[#eee7d7]"
-                >
-                  <Plus size={16} />
-                </button>
-              </div>
-
-              <button
-                type="button"
-                disabled={!inStock}
-                onClick={() => addToCart(product, quantity, selectedVariant)}
-                className={`${ui.btnPrimary} flex-1`}
-              >
-                Add to cart
-              </button>
-              <button
-                type="button"
-                disabled={!inStock}
-                onClick={() => {
-                  addToCart(product, quantity, selectedVariant)
-                  navigate('/checkout')
-                }}
-                className={`${ui.btnSecondary} flex-1`}
-              >
-                Buy now
-              </button>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={() => toggleWishlist(product.id)}
-                aria-pressed={isWishlisted}
-                className={ui.btnGhost}
-              >
-                <Heart size={16} fill={isWishlisted ? '#651F32' : 'none'} className={isWishlisted ? 'text-[#651F32]' : ''} />
-                {isWishlisted ? 'Saved' : 'Save to wishlist'}
-              </button>
-              <span className={`text-sm font-medium ${inStock ? 'text-[#247b5c]' : 'text-[#a23b36]'}`}>
-                {inStock ? `In stock · ${product.stock} left` : 'Out of stock'}
-              </span>
-            </div>
-
-            {/* Pincode */}
-            <div className={`${ui.card} mt-6 p-5`}>
-              <label htmlFor="pincode" className="text-sm font-semibold text-[#2c1e19]">
-                Check delivery availability
-              </label>
-              <div className="mt-3 flex gap-2">
-                <input
-                  id="pincode"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={pincode}
-                  onChange={(event) => {
-                    setPincode(event.target.value)
-                    setDeliveryStatus(null)
-                  }}
-                  placeholder="Enter PIN code"
-                  className={ui.input}
-                />
-                <button type="button" onClick={handlePincodeCheck} className={`${ui.btnSecondary} shrink-0`}>
-                  Check
-                </button>
-              </div>
-              {deliveryStatus && (
-                <p className={`mt-2 text-sm ${deliveryStatus.ok ? 'text-[#247b5c]' : 'text-[#a23b36]'}`}>
-                  {deliveryStatus.text}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="mt-12">
-          <div role="tablist" className="flex gap-1 overflow-x-auto border-b border-[#e2d9c5]">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                role="tab"
-                aria-selected={activeTab === tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition ${
-                  activeTab === tab.id
-                    ? 'border-[#b88a3e] text-[#2c1e19]'
-                    : 'border-transparent text-[#817970] hover:text-[#2c1e19]'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="py-8">
-            {activeTab === 'description' && (
-              <p className="max-w-3xl text-base leading-7 text-[#71645b]">{product.description}</p>
-            )}
-
-            {activeTab === 'specifications' && (
-              <dl className="grid gap-px overflow-hidden rounded-2xl border border-[#e2d9c5] bg-[#e2d9c5] sm:grid-cols-2">
-                {specs.map((spec) => (
-                  <div key={spec.label} className="bg-[#fffdf7] p-5">
-                    <dt className="text-xs uppercase tracking-wider text-[#817970]">{spec.label}</dt>
-                    <dd className="mt-1 text-sm font-semibold text-[#2c1e19]">{spec.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-
-            {activeTab === 'reviews' && (
-              <div className="grid gap-4 md:grid-cols-2">
-                {REVIEWS.map((review) => (
-                  <figure key={review.author} className={`${ui.card} p-6`}>
-                    <Stars rating={5} />
-                    <blockquote className="mt-3 text-[15px] leading-7 text-[#493b32]">“{review.quote}”</blockquote>
-                    <figcaption className="mt-4 text-sm font-semibold text-[#2c1e19]">— {review.author}</figcaption>
-                  </figure>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {recentProducts.length > 0 && (
-          <div className="mt-12">
-            <SectionHeading eyebrow="Curated for you" title="You may also like" />
-            <div className="flex flex-wrap justify-center gap-4 sm:justify-start">
-              {recentProducts.map((item) => (
-                <ProductCard
-                  key={item.id}
-                  product={item}
-                  addToCart={addToCart}
-                  toggleWishlist={toggleWishlist}
-                  isWishlisted={wishlist.includes(item.id)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </section>
   )
 }
 
@@ -1768,6 +1618,7 @@ function GoogleIcon() {
 }
 
 function AccountPage() {
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('login')
   const [user, setUser] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
@@ -1785,12 +1636,17 @@ function AccountPage() {
 
         if (currentUser) {
           try {
+            const profileSnapshot = await getDoc(doc(db, 'users', currentUser.uid))
+            if (profileSnapshot.data()?.role === 'admin') {
+              navigate('/admin', { replace: true })
+              return
+            }
             await saveUserProfile(currentUser)
           } catch (error) {
             setErrorMessage(
               error?.code === 'permission-denied'
-                ? 'You are signed in, but Firestore rules blocked saving your profile.'
-                : 'You are signed in, but your profile could not be saved. Please try again.',
+                ? 'You are signed in, but Firestore rules blocked checking your account role or saving your profile.'
+                : 'You are signed in, but your account could not be verified. Please try again.',
             )
           }
         }
@@ -1802,7 +1658,7 @@ function AccountPage() {
     )
 
     return unsubscribe
-  }, [])
+  }, [navigate])
 
   const switchTab = (tab) => {
     setActiveTab(tab)
@@ -1996,311 +1852,6 @@ function AccountPage() {
               </li>
             ))}
           </ul>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-/* ------------------------------------------------------------------ */
-/* Admin                                                              */
-/* ------------------------------------------------------------------ */
-
-const DEFAULT_IMAGE_LIST = FALLBACK_IMAGE
-const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME?.trim()
-const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET?.trim()
-
-const EMPTY_PRODUCT_FORM = {
-  id: '',
-  name: '',
-  category: 'Silk Sarees',
-  fabric: 'Silk',
-  price: 2999,
-  discountedPrice: 2499,
-  discount: 16,
-  stock: 10,
-  rating: 4.5,
-  reviews: 0,
-  badge: 'New',
-  color: 'Ivory',
-  colors: 'Ivory, Rose, Gold',
-  occasion: 'Festive',
-  material: 'Silk',
-  length: '5.5 meters',
-  blouse: 'Included',
-  care: 'Dry clean preferred.',
-  description: '',
-  images: DEFAULT_IMAGE_LIST,
-}
-
-const splitList = (value) =>
-  String(value || '')
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-
-const uploadProductImage = async (file) => {
-  if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
-    throw new Error('Cloudinary is not configured. Check the Cloudinary values in .env and restart the app.')
-  }
-
-  const body = new FormData()
-  body.append('file', file)
-  body.append('upload_preset', CLOUDINARY_UPLOAD_PRESET)
-
-  const response = await fetch(
-    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
-    { method: 'POST', body },
-  )
-  const result = await response.json()
-
-  if (!response.ok) {
-    throw new Error(result.error?.message || 'Cloudinary could not upload this image.')
-  }
-  if (!result.secure_url) {
-    throw new Error('Cloudinary did not return a secure image URL.')
-  }
-
-  return result.secure_url
-}
-
-function normalizeProduct(raw) {
-  const colors = splitList(raw.colors)
-  const images = splitList(raw.images)
-  const colorList = colors.length ? colors : [raw.color || 'Classic'].filter(Boolean)
-
-  return {
-    ...raw,
-    id: raw.id || raw.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-    price: Number(raw.price) || 0,
-    discountedPrice: Number(raw.discountedPrice) || Number(raw.price) || 0,
-    discount: Number(raw.discount) || 0,
-    stock: Number(raw.stock) || 0,
-    rating: Number(raw.rating) || 0,
-    reviews: Number(raw.reviews) || 0,
-    colors: colorList,
-    images: images.length ? images : [FALLBACK_IMAGE],
-    color: raw.color || colorList[0] || 'Classic',
-  }
-}
-
-function AdminPage({ products, onAddProduct, onUpdateProduct, onDeleteProduct }) {
-  const [form, setForm] = useState(EMPTY_PRODUCT_FORM)
-  const [editingId, setEditingId] = useState(null)
-  const [isUploadingImages, setIsUploadingImages] = useState(false)
-  const [imageUploadError, setImageUploadError] = useState('')
-
-  const resetForm = () => {
-    setForm(EMPTY_PRODUCT_FORM)
-    setEditingId(null)
-  }
-
-  const handleInputChange = (event) => {
-    const { name, value } = event.target
-    setForm((current) => ({ ...current, [name]: value }))
-  }
-
-  const handleImageUpload = async (event) => {
-    const input = event.currentTarget
-    const files = Array.from(input.files || [])
-    if (!files.length) return
-
-    setImageUploadError('')
-    setIsUploadingImages(true)
-    try {
-      for (const file of files) {
-        if (!file.type.startsWith('image/')) {
-          throw new Error(`${file.name} is not an image file.`)
-        }
-
-        const imageUrl = await uploadProductImage(file)
-        setForm((current) => ({
-          ...current,
-          images: [...splitList(current.images), imageUrl].join(', '),
-        }))
-      }
-    } catch (error) {
-      setImageUploadError(
-        error instanceof Error ? error.message : 'Image upload failed. Please try again.',
-      )
-    } finally {
-      setIsUploadingImages(false)
-      input.value = ''
-    }
-  }
-
-  const handleSubmit = (event) => {
-    event.preventDefault()
-    const normalized = normalizeProduct(form)
-
-    if (editingId) onUpdateProduct(editingId, normalized)
-    else onAddProduct(normalized)
-
-    resetForm()
-  }
-
-  const handleEdit = (product) => {
-    setEditingId(product.id)
-    setForm({
-      ...product,
-      colors: Array.isArray(product.colors) ? product.colors.join(', ') : product.color,
-      images: Array.isArray(product.images) ? product.images.join(', ') : product.images,
-    })
-  }
-
-  const handleDelete = (productId) => {
-    onDeleteProduct(productId)
-    if (editingId === productId) resetForm()
-  }
-
-  const totalStock = products.reduce((sum, item) => sum + item.stock, 0)
-  const avgRating = (products.reduce((sum, item) => sum + item.rating, 0) / (products.length || 1)).toFixed(1)
-
-  const metrics = [
-    { label: 'Total products', value: products.length },
-    { label: 'Units in stock', value: totalStock },
-    { label: 'Avg rating', value: avgRating },
-    { label: 'Featured', value: products[0]?.name?.split(' ')[0] || 'New' },
-  ]
-
-  const fields = [
-    { name: 'name', label: 'Product name', placeholder: 'Royal silk saree', span: 'full' },
-    { name: 'category', label: 'Category' },
-    { name: 'fabric', label: 'Fabric' },
-    { name: 'occasion', label: 'Occasion' },
-    { name: 'price', label: 'MRP', type: 'number' },
-    { name: 'discountedPrice', label: 'Selling price', type: 'number' },
-    { name: 'discount', label: 'Discount %', type: 'number' },
-    { name: 'stock', label: 'Stock', type: 'number' },
-    { name: 'rating', label: 'Rating', type: 'number', step: '0.1' },
-    { name: 'reviews', label: 'Reviews', type: 'number' },
-    { name: 'colors', label: 'Colors (comma separated)', span: 'full' },
-    { name: 'color', label: 'Primary color' },
-    { name: 'material', label: 'Material' },
-    { name: 'length', label: 'Length' },
-    { name: 'blouse', label: 'Blouse' },
-    { name: 'images', label: 'Image URLs (comma separated)', span: 'full', textarea: true, rows: 3 },
-    { name: 'description', label: 'Description', span: 'full', textarea: true, rows: 4 },
-    { name: 'care', label: 'Care instructions', span: 'full' },
-  ]
-
-  return (
-    <section className={ui.section}>
-      <div className={`${ui.container} space-y-6`}>
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <span className={ui.eyebrow}>Admin dashboard</span>
-            <h1 className={`mt-2 ${ui.h2}`}>Inventory</h1>
-          </div>
-          <button type="button" onClick={resetForm} disabled={isUploadingImages} className={ui.btnSecondary}>
-            Reset form
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {metrics.map((metric) => (
-            <div key={metric.label} className={`${ui.card} p-4`}>
-              <span className="text-xs text-[#817970]">{metric.label}</span>
-              <strong className="mt-1 block text-2xl font-semibold text-[#2c1e19]">{metric.value}</strong>
-            </div>
-          ))}
-        </div>
-
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(340px,0.7fr)]">
-          <div className={`${ui.card} ${ui.cardPad}`}>
-            <h2 className={ui.h3}>{editingId ? 'Edit product' : 'Add new product'}</h2>
-            <form className="mt-5 grid gap-4 sm:grid-cols-2" onSubmit={handleSubmit}>
-              {fields.map((field) => {
-                const spanClass = field.span === 'full' ? 'sm:col-span-2' : ''
-                const common = {
-                  id: field.name,
-                  name: field.name,
-                  value: form[field.name],
-                  onChange: handleInputChange,
-                  required: true,
-                  className: ui.input,
-                }
-                return (
-                  <Field key={field.name} label={field.label} className={spanClass}>
-                    {field.name === 'images' ? (
-                      <>
-                        <textarea {...common} rows={field.rows} />
-                        <label className={`${ui.btnSecondary} mt-3 w-fit cursor-pointer`}>
-                          {isUploadingImages ? 'Uploading images…' : 'Upload images to Cloudinary'}
-                          <input
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            disabled={isUploadingImages}
-                            onChange={handleImageUpload}
-                            className="sr-only"
-                          />
-                        </label>
-                        <p className="mt-2 text-xs text-[#817970]">
-                          Uploaded image URLs will be added above. Save the product to keep them.
-                        </p>
-                        {imageUploadError && (
-                          <p role="alert" className={`mt-2 ${ui.alertError}`}>{imageUploadError}</p>
-                        )}
-                      </>
-                    ) : field.textarea ? (
-                      <textarea {...common} rows={field.rows} />
-                    ) : (
-                      <input {...common} type={field.type || 'text'} step={field.step} placeholder={field.placeholder} />
-                    )}
-                  </Field>
-                )
-              })}
-
-              <div className="flex flex-wrap gap-3 sm:col-span-2">
-                <button type="submit" disabled={isUploadingImages} className={ui.btnPrimary}>
-                  {isUploadingImages
-                    ? 'Uploading images…'
-                    : editingId
-                      ? 'Update product'
-                      : 'Add product'}
-                </button>
-                {editingId && (
-                  <button type="button" onClick={resetForm} className={ui.btnSecondary}>
-                    Cancel
-                  </button>
-                )}
-              </div>
-            </form>
-          </div>
-
-          <div className={`${ui.card} ${ui.cardPad}`}>
-            <h2 className={ui.h3}>Current inventory</h2>
-            <ul className="mt-4 space-y-3">
-              {products.map((product) => (
-                <li key={product.id} className="rounded-xl border border-[#e2d9c5] p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <strong className="block truncate text-sm text-[#2c1e19]">{product.name}</strong>
-                      <div className="mt-1.5 flex flex-wrap gap-3 text-xs text-[#817970]">
-                        <span>{product.category}</span>
-                        <span>{product.stock} in stock</span>
-                      </div>
-                    </div>
-                    <span className={ui.badge}>{formatPrice(product.discountedPrice)}</span>
-                  </div>
-                  <div className="mt-3 flex items-center gap-2">
-                    <button type="button" onClick={() => handleEdit(product)} className={ui.btnGhost}>
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(product.id)}
-                      aria-label={`Delete ${product.name}`}
-                      className="flex h-10 w-10 items-center justify-center rounded-full text-[#493b32] transition hover:bg-[#f3e7e5] hover:text-[#a23b36]"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
         </div>
       </div>
     </section>
