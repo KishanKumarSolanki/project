@@ -224,6 +224,8 @@ function AdminPage({
   const [imageUrlInput, setImageUrlInput] = useState('')
   const [inlineCategoryName, setInlineCategoryName] = useState('')
   const [showInlineCategoryCreator, setShowInlineCategoryCreator] = useState(false)
+  const [inlineCategoryEditId, setInlineCategoryEditId] = useState(null)
+  const [inlineCategoryEditName, setInlineCategoryEditName] = useState('')
   const [categoryForm, setCategoryForm] = useState(EMPTY_CATEGORY)
   const [editingCategoryId, setEditingCategoryId] = useState(null)
   const [editingId, setEditingId] = useState(null)
@@ -272,6 +274,10 @@ function AdminPage({
   const resetProductForm = () => {
     setForm(EMPTY_PRODUCT)
     setImageUrlInput('')
+    setInlineCategoryEditId(null)
+    setInlineCategoryEditName('')
+    setShowInlineCategoryCreator(false)
+    setInlineCategoryName('')
     setEditingId(null)
     setError('')
     setNotice('')
@@ -364,6 +370,41 @@ function AdminPage({
       setInlineCategoryName('')
       setShowInlineCategoryCreator(false)
       setNotice(`Category "${name}" created and selected.`)
+    } catch (saveError) {
+      setError(messageForError(saveError))
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleStartInlineCategoryEdit = () => {
+    const category = categories.find((item) => item.name === form.category)
+    if (!category) return
+    setInlineCategoryEditId(category.id)
+    setInlineCategoryEditName(category.name)
+    setShowInlineCategoryCreator(false)
+    setError('')
+    setNotice('')
+  }
+
+  const handleInlineCategoryUpdate = async () => {
+    const category = categories.find((item) => item.id === inlineCategoryEditId)
+    const name = inlineCategoryEditName.trim()
+    if (!category) return
+    if (!name) {
+      setError('Enter a category name.')
+      return
+    }
+
+    setError('')
+    setNotice('')
+    setIsSaving(true)
+    try {
+      await onUpdateCategory(category.id, { ...category, name })
+      setForm((current) => ({ ...current, category: name }))
+      setInlineCategoryEditId(null)
+      setInlineCategoryEditName('')
+      setNotice(`Category updated to "${name}".`)
     } catch (saveError) {
       setError(messageForError(saveError))
     } finally {
@@ -617,7 +658,58 @@ function AdminPage({
                         >
                           <Plus size={14} className="mr-1 inline" /> Create
                         </button>
+                        {form.category && categories.some((category) => category.name === form.category) && (
+                          <button
+                            type="button"
+                            onClick={handleStartInlineCategoryEdit}
+                            aria-label={`Edit ${form.category} category`}
+                            title="Edit selected category"
+                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[#e7e1d7] text-[#5f564a] transition hover:bg-[#f6f4ef]"
+                          >
+                            <Pencil size={15} />
+                          </button>
+                        )}
                       </div>
+                      {inlineCategoryEditId && (
+                        <div className="mt-3 flex gap-2">
+                          <input
+                            className={`${inputClass} min-w-0 flex-1`}
+                            value={inlineCategoryEditName}
+                            onChange={(event) => setInlineCategoryEditName(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault()
+                                handleInlineCategoryUpdate()
+                              }
+                              if (event.key === 'Escape') {
+                                setInlineCategoryEditId(null)
+                                setInlineCategoryEditName('')
+                              }
+                            }}
+                            placeholder="Category name"
+                            aria-label="Edit category name"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={handleInlineCategoryUpdate}
+                            disabled={isSaving}
+                            className="shrink-0 rounded-xl bg-[#2b251e] px-3 text-xs font-semibold text-white disabled:opacity-60"
+                          >
+                            {isSaving ? 'Saving…' : 'Update'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setInlineCategoryEditId(null)
+                              setInlineCategoryEditName('')
+                            }}
+                            className="rounded-xl border border-[#e7e1d7] px-3 text-xs font-semibold text-[#635b50]"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
                       {showInlineCategoryCreator && (
                         <div className="mt-3 flex gap-2">
                           <input

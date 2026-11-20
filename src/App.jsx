@@ -554,11 +554,29 @@ function App() {
       throw new Error('A category with this name already exists.')
     }
 
+    const previousCategory = categories.find((item) => item.id === categoryId)
+    const previousName = previousCategory?.name?.trim()
+    const nextName = updatedCategory.name.trim()
+
     await setDoc(
       doc(db, 'categories', categoryId),
-      { ...updatedCategory, id: categoryId, name: updatedCategory.name.trim(), updatedAt: serverTimestamp() },
+      { ...updatedCategory, id: categoryId, name: nextName, updatedAt: serverTimestamp() },
       { merge: true },
     )
+
+    if (previousName && previousName !== nextName) {
+      await Promise.all(
+        catalog
+          .filter((product) => product.category === previousName)
+          .map((product) =>
+            setDoc(
+              doc(db, 'products', product.id),
+              { category: nextName, updatedAt: serverTimestamp() },
+              { merge: true },
+            ),
+          ),
+      )
+    }
   }
 
   const handleDeleteCategory = async (categoryId) =>
