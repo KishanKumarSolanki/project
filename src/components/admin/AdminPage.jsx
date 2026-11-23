@@ -47,6 +47,9 @@ const EMPTY_PRODUCT = {
   sareeColour: '',
   blouseColour: '',
   craft: '',
+  fallPico: '',
+  fallPicoAvailable: false,
+  fallPicoPrice: '',
   blouseStitchingAvailable: false,
   plainBlousePrice: '',
   paddedBlousePrice: '',
@@ -331,6 +334,9 @@ function AdminPage({
       reviews: Number(form.reviews) || 0,
       plainBlousePrice: form.plainBlousePrice === '' ? null : Number(form.plainBlousePrice),
       paddedBlousePrice: form.paddedBlousePrice === '' ? null : Number(form.paddedBlousePrice),
+      fallPicoPrice: form.fallPicoPrice === '' ? null : Number(form.fallPicoPrice),
+      fallPico: form.fallPico?.trim() || '',
+      fallPicoAvailable: form.fallPicoAvailable === true,
       colors: colors.length ? colors : [form.color || 'Classic'],
       color: form.color || colors[0] || 'Classic',
       images: form.images,
@@ -428,6 +434,9 @@ function AdminPage({
       reviews: String(product.reviews ?? 0),
       plainBlousePrice: product.plainBlousePrice == null ? '' : String(product.plainBlousePrice),
       paddedBlousePrice: product.paddedBlousePrice == null ? '' : String(product.paddedBlousePrice),
+      fallPicoPrice: product.fallPicoPrice == null ? '' : String(product.fallPicoPrice),
+      fallPico: product.fallPico ?? '',
+      fallPicoAvailable: Boolean(product.fallPicoAvailable),
       showOnStorefront: product.showOnStorefront === true,
       colors: Array.isArray(product.colors) ? product.colors.join(', ') : product.color || '',
       images: Array.isArray(product.images) ? product.images : [],
@@ -802,6 +811,7 @@ function AdminPage({
                           ['blouseColour', 'Blouse colour', 'Red'],
                           ['craft', 'Craft', 'Handloom'],
                           ['blouse', 'Blouse details', 'Included'],
+                          ['fallPico', 'Fall, pico option', 'e.g. Complimentary / Free / On request'],
                           ['care', 'Care instructions', 'Dry clean preferred'],
                           ['rating', 'Rating', '0'],
                           ['reviews', 'Reviews', '0'],
@@ -830,6 +840,23 @@ function AdminPage({
                         <Field label="Blouse stitching note" className="sm:col-span-2">
                           <textarea className={`${inputClass} min-h-20 resize-y`} value={form.blouseStitchingNote} onChange={(event) => setForm({ ...form, blouseStitchingNote: event.target.value })} placeholder="Share measurements and confirm size with our team via WhatsApp." />
                         </Field>
+                        <label className="flex items-start gap-3 rounded-xl bg-[#f7f5f0] p-3.5 sm:col-span-2">
+                          <input
+                            type="checkbox"
+                            checked={form.fallPicoAvailable}
+                            onChange={(event) => setForm({ ...form, fallPicoAvailable: event.target.checked })}
+                            className="mt-0.5 h-4 w-4 accent-[#2b251e]"
+                          />
+                          <span>
+                            <span className="block text-sm font-semibold">Fall and pico service available on request</span>
+                            <span className="mt-0.5 block text-xs text-[#8c8479]">Check this to highlight fall and pico customization on the product page.</span>
+                          </span>
+                        </label>
+                        {form.fallPicoAvailable && (
+                          <Field label="Fall and pico price (₹) (0 if free)" className="sm:col-span-2">
+                            <input className={inputClass} type="number" min="0" step="1" value={form.fallPicoPrice} onChange={(event) => setForm({ ...form, fallPicoPrice: event.target.value })} placeholder="0 (Leave empty or 0 if free)" />
+                          </Field>
+                        )}
                       </div>
                     </details>
 

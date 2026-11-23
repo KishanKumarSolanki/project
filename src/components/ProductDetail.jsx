@@ -93,6 +93,7 @@ function ProductDetail({ addToCart, toggleWishlist, wishlist, products, product 
     { label: 'Weave', value: product.weave },
     { label: 'Saree colour', value: sareeColour },
     { label: 'Saree length', value: product.length },
+    { label: 'Fall, pico', value: product.fallPico },
     { label: 'Blouse colour', value: product.blouseColour },
     { label: 'Craft', value: product.craft },
   ].filter((spec) => spec.value)
@@ -105,6 +106,7 @@ function ProductDetail({ addToCart, toggleWishlist, wishlist, products, product 
     { label: 'Saree length', value: product.length },
     { label: 'Blouse colour', value: product.blouseColour },
     { label: 'Blouse details', value: product.blouse },
+    { label: 'Fall, pico', value: product.fallPico },
     { label: 'Craft', value: product.craft },
     { label: 'Care', value: product.care },
     {
@@ -395,6 +397,21 @@ function ProductDetail({ addToCart, toggleWishlist, wishlist, products, product 
                     {product.blouseStitchingNote}
                   </p>
                 )}
+              </section>
+            )}
+
+            {/* Fall & pico customization */}
+            {(product.fallPicoAvailable || product.fallPico) && (
+              <section className={`${ui.card} mt-4 p-5`} aria-labelledby="fall-pico-heading">
+                <h2 id="fall-pico-heading" className="font-semibold text-[#2c1e19]">
+                  Fall & Pico
+                </h2>
+                <p className="mt-1 text-sm text-[#71645b]">
+                  {product.fallPico ||
+                    (Number(product.fallPicoPrice) > 0
+                      ? `Available at ${formatPrice(product.fallPicoPrice)}`
+                      : 'Complimentary / Included on request')}
+                </p>
               </section>
             )}
           </div>
