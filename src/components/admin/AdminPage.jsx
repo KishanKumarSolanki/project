@@ -401,10 +401,14 @@ function AdminPage({
     setIsSaving(true)
     try {
       await onUpdateCategory(category.id, { ...category, name })
-      setForm((current) => ({ ...current, category: name }))
+      const matchingCategory = categories.find(
+        (item) => item.name.trim().toLowerCase() === name.toLowerCase(),
+      )
+      const selectedName = matchingCategory?.name || name
+      setForm((current) => ({ ...current, category: selectedName }))
       setInlineCategoryEditId(null)
       setInlineCategoryEditName('')
-      setNotice(`Category updated to "${name}".`)
+      setNotice(`Category updated to "${selectedName}".`)
     } catch (saveError) {
       setError(messageForError(saveError))
     } finally {
@@ -646,10 +650,20 @@ function AdminPage({
                       <div className="flex gap-2">
                         <select className={`${inputClass} min-w-0 flex-1`} value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} required>
                           <option value="">Choose category</option>
-                          {form.category && !categories.some((category) => category.name === form.category && category.showOnStorefront) && (
+                          {form.category && !categories.some((category) => category.name.trim().toLowerCase() === form.category.trim().toLowerCase() && category.showOnStorefront) && (
                             <option value={form.category}>{form.category}</option>
                           )}
-                          {categories.filter((category) => category.showOnStorefront).map((category) => <option key={category.id || category.name} value={category.name}>{category.name}</option>)}
+                          {Array.from(
+                            new Map(
+                              categories
+                                .filter((category) => category.showOnStorefront)
+                                .map((cat) => [cat.name.trim().toLowerCase(), cat])
+                            ).values()
+                          ).map((category) => (
+                            <option key={category.id || category.name} value={category.name}>
+                              {category.name}
+                            </option>
+                          ))}
                         </select>
                         <button
                           type="button"

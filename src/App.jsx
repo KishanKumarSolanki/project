@@ -193,7 +193,9 @@ const normalizeFirestoreProduct = (snapshot) => {
     showOnStorefront:
       typeof data.showOnStorefront === 'boolean'
         ? data.showOnStorefront
-        : wasCreatedInAdmin(data),
+        : typeof data.isActive === 'boolean'
+          ? data.isActive
+          : wasCreatedInAdmin(data),
     images: images.length
       ? images
       : singleImage
@@ -213,7 +215,9 @@ const normalizeFirestoreCategory = (snapshot) => {
     showOnStorefront:
       typeof data.showOnStorefront === 'boolean'
         ? data.showOnStorefront
-        : wasCreatedInAdmin(data),
+        : typeof data.isActive === 'boolean'
+          ? data.isActive
+          : wasCreatedInAdmin(data),
   }
 }
 
@@ -529,13 +533,27 @@ function App() {
     deleteDoc(doc(db, 'products', productId))
 
   const handleAddCategory = async (category) => {
-    if (categories.some((item) => item.name.trim().toLowerCase() === category.name.trim().toLowerCase())) {
-      throw new Error('A category with this name already exists.')
+    const trimmedName = category.name.trim()
+    const existing = categories.find(
+      (item) => item.name.trim().toLowerCase() === trimmedName.toLowerCase(),
+    )
+    if (existing) {
+      await setDoc(
+        doc(db, 'categories', existing.id),
+        {
+          showOnStorefront: true,
+          updatedAt: serverTimestamp(),
+          ...(category.image ? { image: category.image } : {}),
+          ...(category.accent ? { accent: category.accent } : {}),
+        },
+        { merge: true },
+      )
+      return
     }
     const categoryRef = doc(collection(db, 'categories'))
     await setDoc(categoryRef, {
       ...category,
-      name: category.name.trim(),
+      name: trimmedName,
       id: categoryRef.id,
       showOnStorefront: true,
       createdAt: serverTimestamp(),
@@ -544,19 +562,46 @@ function App() {
   }
 
   const handleUpdateCategory = async (categoryId, updatedCategory) => {
-    if (
-      categories.some(
-        (item) =>
-          item.id !== categoryId &&
-          item.name.trim().toLowerCase() === updatedCategory.name.trim().toLowerCase(),
-      )
-    ) {
-      throw new Error('A category with this name already exists.')
-    }
+    const nextName = updatedCategory.name.trim()
+    const duplicateCategory = categories.find(
+      (item) =>
+        item.id !== categoryId &&
+        item.name.trim().toLowerCase() === nextName.toLowerCase(),
+    )
 
     const previousCategory = categories.find((item) => item.id === categoryId)
     const previousName = previousCategory?.name?.trim()
-    const nextName = updatedCategory.name.trim()
+
+    if (duplicateCategory) {
+      await setDoc(
+        doc(db, 'categories', duplicateCategory.id),
+        {
+          name: duplicateCategory.name,
+          showOnStorefront: true,
+          image: duplicateCategory.image || updatedCategory.image || '',
+          accent: duplicateCategory.accent || updatedCategory.accent || '',
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      )
+
+      await deleteDoc(doc(db, 'categories', categoryId))
+
+      if (previousName && previousName !== duplicateCategory.name) {
+        await Promise.all(
+          catalog
+            .filter((product) => product.category === previousName)
+            .map((product) =>
+              setDoc(
+                doc(db, 'products', product.id),
+                { category: duplicateCategory.name, updatedAt: serverTimestamp() },
+                { merge: true },
+              ),
+            ),
+        )
+      }
+      return
+    }
 
     await setDoc(
       doc(db, 'categories', categoryId),
