@@ -4,10 +4,10 @@ import { Heart, ShoppingBag, Star } from 'lucide-react'
 import { formatPrice } from '../utils/formatPrice'
 import ImageWithFallback from './ImageWithFallback'
 
-function ProductCard({ product, addToCart, toggleWishlist, isWishlisted }) {
+function ProductCard({ product, addToCart, toggleWishlist, isWishlisted, className = '' }) {
   return (
     <motion.article
-      className="w-[82vw] max-w-[390px] shrink-0 snap-start overflow-hidden rounded-[26px] border border-[#ddd4bf] bg-[#fffdf7] shadow-[0_8px_24px_rgba(44,30,25,0.05)] sm:w-[340px]"
+      className={`w-[82vw] max-w-[390px] shrink-0 snap-start overflow-hidden rounded-[26px] border border-[#ddd4bf] bg-[#fffdf7] shadow-[0_8px_24px_rgba(44,30,25,0.05)] sm:w-[340px] ${className}`}
       initial={{ opacity: 0, y: 16 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.12 }}

@@ -622,7 +622,7 @@ function ProductDetail({ addToCart, toggleWishlist, wishlist, products, product 
             <h2 className="mt-2 mb-8 font-serif text-2xl font-semibold tracking-tight text-[#2c1e19] sm:text-3xl">
               You may also like
             </h2>
-            <div className="grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-4">
+            <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-3 [scrollbar-width:none] sm:mx-0 sm:gap-5 sm:px-0 lg:grid lg:grid-cols-4 lg:gap-6 lg:overflow-visible">
               {recentProducts.map((item) => (
                 <ProductCard
                   key={item.id}
@@ -630,6 +630,7 @@ function ProductDetail({ addToCart, toggleWishlist, wishlist, products, product 
                   addToCart={addToCart}
                   toggleWishlist={toggleWishlist}
                   isWishlisted={wishlist.includes(item.id)}
+                  className="lg:w-full lg:max-w-none"
                 />
               ))}
             </div>

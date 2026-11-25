@@ -6,7 +6,8 @@ function ShopPage({ toggleWishlist, wishlist, products, categories }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const search = searchParams.get('search') || ''
   const selectedCategory = searchParams.get('category') || 'All'
-  const maxPrice = Number(searchParams.get('maxPrice')) || 7000
+  const rawMaxPrice = searchParams.get('maxPrice')
+  const maxPrice = rawMaxPrice ? Number(rawMaxPrice) : Infinity
 
   const availableShopTabs = useMemo(() => {
     return [
@@ -46,7 +47,7 @@ function ShopPage({ toggleWishlist, wishlist, products, categories }) {
         const matchesCategory =
           productCategory === 'All' ||
           productCategory === 'Sale' ||
-          product.category === productCategory
+          product.category.trim().toLowerCase() === productCategory.trim().toLowerCase()
         const matchesSale = productCategory !== 'Sale' || product.discount > 0
         const matchesPrice = product.discountedPrice <= maxPrice
         return matchesSearch && matchesCategory && matchesSale && matchesPrice
