@@ -8,7 +8,13 @@ function BrandMark({ alignStart = false, light = false }) {
       className={`flex shrink-0 items-center justify-center ${alignStart ? 'justify-start' : 'lg:mx-auto'}`}
       aria-label="Dori Taaga home"
     >
-      <img className={`h-[60px] w-auto object-contain sm:h-[64px] ${light ? 'brightness-0 invert' : ''}`} src={brandLogo} alt="Dori Taaga" />
+      <img
+        className={`h-[60px] w-auto object-contain sm:h-[64px] ${
+          light ? 'rounded-full ring-1 ring-[#d9b676]/40 shadow-md' : ''
+        }`}
+        src={brandLogo}
+        alt="Dori Taaga"
+      />
     </Link>
   )
 }

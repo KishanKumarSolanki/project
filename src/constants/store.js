@@ -33,7 +33,7 @@ export const AUTH_ERROR_MESSAGES = {
 }
 
 export const ui = {
-  page: 'min-h-screen bg-[#f8f5e9] pb-24 text-[#2c1e19] md:pb-0',
+  page: 'min-h-screen bg-[#f8f5e9] text-[#2c1e19]',
   section: 'w-full px-4 py-8 sm:px-7 sm:py-14',
   container: 'mx-auto w-full max-w-7xl',
   card: 'rounded-2xl border border-[#e2d9c5] bg-[#fffdf7] shadow-[0_1px_2px_rgba(44,30,25,0.04)]',
