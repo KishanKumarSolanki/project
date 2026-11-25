@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { ToastContainer, toast } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
 import logo from '../../assets/dori-taaga-logo.png'
 import {
   Activity,
@@ -487,20 +489,30 @@ function AdminPage({
       images: form.images,
     }
 
+    const notifySuccess = (message) => {
+      setNotice(message)
+      toast.success(message)
+    }
+
+    const notifyError = (message) => {
+      setError(message)
+      toast.error(message)
+    }
+
     try {
       if (editingId) {
         await onUpdateProduct(editingId, product)
-        setNotice('Product updated.')
+        notifySuccess('Product updated.')
       } else {
         await onAddProduct(product)
-        setNotice('Product added to your store.')
+        notifySuccess('Product added to your store.')
       }
       setForm(EMPTY_PRODUCT)
       setImageUrlInput('')
       setEditingId(null)
       setIsFormOpen(false)
     } catch (saveError) {
-      setError(messageForError(saveError))
+      notifyError(messageForError(saveError))
     } finally {
       setIsSaving(false)
     }
@@ -510,6 +522,7 @@ function AdminPage({
     const name = inlineCategoryName.trim()
     if (!name) {
       setError('Enter a category name.')
+      toast.error('Enter a category name.')
       return
     }
 
@@ -521,9 +534,13 @@ function AdminPage({
       setForm((current) => ({ ...current, category: name }))
       setInlineCategoryName('')
       setShowInlineCategoryCreator(false)
-      setNotice(`Category "${name}" created and selected.`)
+      const msg = `Category "${name}" created and selected.`
+      setNotice(msg)
+      toast.success(msg)
     } catch (saveError) {
-      setError(messageForError(saveError))
+      const msg = messageForError(saveError)
+      setError(msg)
+      toast.error(msg)
     } finally {
       setIsSaving(false)
     }
@@ -545,6 +562,7 @@ function AdminPage({
     if (!category) return
     if (!name) {
       setError('Enter a category name.')
+      toast.error('Enter a category name.')
       return
     }
 
@@ -560,9 +578,13 @@ function AdminPage({
       setForm((current) => ({ ...current, category: selectedName }))
       setInlineCategoryEditId(null)
       setInlineCategoryEditName('')
-      setNotice(`Category updated to "${selectedName}".`)
+      const msg = `Category updated to "${selectedName}".`
+      setNotice(msg)
+      toast.success(msg)
     } catch (saveError) {
-      setError(messageForError(saveError))
+      const msg = messageForError(saveError)
+      setError(msg)
+      toast.error(msg)
     } finally {
       setIsSaving(false)
     }
@@ -606,8 +628,11 @@ function AdminPage({
       await onDeleteProduct(product.id)
       if (editingId === product.id) handleCloseForm()
       setNotice('Product deleted.')
+      toast.success('Product deleted.')
     } catch (deleteError) {
-      setError(messageForError(deleteError))
+      const msg = messageForError(deleteError)
+      setError(msg)
+      toast.error(msg)
     }
   }
 
@@ -616,7 +641,9 @@ function AdminPage({
     setError('')
     setNotice('')
     if (categoryForm.image && !isAllowedImageUrl(categoryForm.image)) {
-      setError('Enter a valid public HTTPS category image URL.')
+      const msg = 'Enter a valid public HTTPS category image URL.'
+      setError(msg)
+      toast.error(msg)
       return
     }
     setIsSaving(true)
@@ -624,15 +651,19 @@ function AdminPage({
       if (editingCategoryId) {
         await onUpdateCategory(editingCategoryId, categoryForm)
         setNotice('Category updated.')
+        toast.success('Category updated.')
       } else {
         await onAddCategory(categoryForm)
         setNotice('Category added and saved to Firebase.')
+        toast.success('Category added and saved to Firebase.')
       }
       setCategoryForm(EMPTY_CATEGORY)
       setEditingCategoryId(null)
       setIsCategoryFormOpen(false)
     } catch (saveError) {
-      setError(messageForError(saveError))
+      const msg = messageForError(saveError)
+      setError(msg)
+      toast.error(msg)
     } finally {
       setIsSaving(false)
     }
@@ -658,8 +689,11 @@ function AdminPage({
       await onDeleteCategory(category.id)
       if (editingCategoryId === category.id) handleCloseCategoryForm()
       setNotice('Category deleted.')
+      toast.success('Category deleted.')
     } catch (deleteError) {
-      setError(messageForError(deleteError))
+      const msg = messageForError(deleteError)
+      setError(msg)
+      toast.error(msg)
     }
   }
 
@@ -668,13 +702,15 @@ function AdminPage({
     setNotice('')
     try {
       await onSetCategoryVisibility(category.id, !category.showOnStorefront)
-      setNotice(
-        category.showOnStorefront
-          ? 'Category hidden from storefront.'
-          : 'Category published to storefront.',
-      )
+      const msg = category.showOnStorefront
+        ? 'Category hidden from storefront.'
+        : 'Category published to storefront.'
+      setNotice(msg)
+      toast.success(msg)
     } catch (visibilityError) {
-      setError(messageForError(visibilityError))
+      const msg = messageForError(visibilityError)
+      setError(msg)
+      toast.error(msg)
     }
   }
 
@@ -1317,6 +1353,15 @@ function AdminPage({
           )}
         </main>
       </div>
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        pauseOnHover
+        theme="light"
+      />
     </div>
   )
 }

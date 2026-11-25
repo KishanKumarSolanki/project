@@ -9,7 +9,7 @@ function BrandMark({ alignStart = false, light = false }) {
       aria-label="Dori Taaga home"
     >
       <img
-        className={`h-[60px] w-auto object-contain sm:h-[64px] ${
+        className={`h-[46px] w-auto object-contain sm:h-[64px] ${
           light ? 'rounded-full ring-1 ring-[#d9b676]/40 shadow-md' : ''
         }`}
         src={brandLogo}

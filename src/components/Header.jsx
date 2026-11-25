@@ -103,29 +103,29 @@ function Header({ cartCount, wishlist }) {
   const searchForm = (
     <form
       onSubmit={submitSearch}
-      className={`group flex h-11 w-full items-center gap-2.5 rounded-full border bg-[#fffdf7] pl-4 pr-1.5 text-[#71645b] transition duration-300 ${
+      className={`group flex h-10 w-full items-center gap-1.5 rounded-full border bg-[#fffdf7] pl-3 pr-1 text-[#71645b] transition duration-300 sm:h-11 sm:gap-2.5 sm:pl-4 sm:pr-1.5 ${
         isSearchFocused
           ? 'border-[#b88a3e] shadow-[0_0_0_4px_rgba(184,138,62,0.15)]'
           : 'border-[#ded5c3] shadow-sm hover:border-[#c9b89a]'
       }`}
     >
-      <Search size={17} strokeWidth={1.9} className={`shrink-0 transition ${isSearchFocused ? 'text-[#85642e]' : 'text-[#9a8f7e]'}`} />
+      <Search size={15} strokeWidth={1.9} className={`hidden shrink-0 transition sm:block ${isSearchFocused ? 'text-[#85642e]' : 'text-[#9a8f7e]'}`} />
       <input
         aria-label="Search sarees, fabrics and colours"
         value={search}
         onChange={(event) => setSearch(event.target.value)}
         onFocus={() => setIsSearchFocused(true)}
         onBlur={() => setIsSearchFocused(false)}
-        placeholder="Search sarees, fabrics, colours…"
-        className="min-w-0 flex-1 bg-transparent text-sm text-[#2c1e19] outline-none placeholder:text-[#9a8f7e]"
+        placeholder="Search sarees..."
+        className="min-w-0 flex-1 bg-transparent text-xs text-[#2c1e19] outline-none placeholder:text-[#9a8f7e] sm:text-sm"
       />
       <button
         type="submit"
         aria-label="Search"
-        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-b from-[#3a2a20] to-[#2c1e19] px-3.5 text-xs font-semibold tracking-wide text-[#f8f5e9] shadow-md transition hover:-translate-y-px hover:shadow-lg"
+        className="inline-flex h-8 w-8 shrink-0 items-center justify-center gap-1.5 rounded-full bg-gradient-to-b from-[#3a2a20] to-[#2c1e19] text-xs font-semibold tracking-wide text-[#f8f5e9] shadow-md transition hover:-translate-y-px hover:shadow-lg sm:w-auto sm:px-3.5"
       >
         <Search size={14} strokeWidth={2} />
-        <span className="hidden sm:inline">Search</span>
+        <span className="hidden xl:inline">Search</span>
       </button>
     </form>
   )
@@ -146,9 +146,9 @@ function Header({ cartCount, wishlist }) {
       </div>
 
       <header className="sticky top-0 z-40 border-b border-[#e2d9c5]/80 bg-[#f8f5e9]/90 shadow-[0_8px_30px_-18px_rgba(44,30,25,0.25)] backdrop-blur-xl">
-        <div className="mx-auto flex h-[76px] max-w-7xl items-center justify-between gap-3 px-4 sm:gap-5 sm:px-7">
+        <div className="mx-auto flex h-[68px] max-w-7xl items-center justify-between gap-2.5 px-3 sm:h-[76px] sm:gap-5 sm:px-7">
           {/* Left: logo and desktop main nav */}
-          <div className="flex min-w-0 items-center gap-3 lg:gap-7">
+          <div className="flex shrink-0 items-center gap-3 lg:gap-7">
             <BrandMark />
 
             <nav className="hidden items-center gap-7 lg:flex" aria-label="Main navigation">
@@ -158,13 +158,13 @@ function Header({ cartCount, wishlist }) {
             </nav>
           </div>
 
-          {/* Center: desktop search */}
-          <div className="hidden min-w-0 flex-1 justify-center xl:flex">
+          {/* Center: search bar (mobile + tablet + desktop) */}
+          <div className="flex min-w-0 flex-1 justify-center">
             <div className="w-full max-w-md">{searchForm}</div>
           </div>
 
           {/* Right: desktop links, login, icons, and mobile menu button at the end */}
-          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             <nav className="mr-3 hidden items-center gap-6 2xl:flex" aria-label="More links">
               <NavLink className={desktopNavLink} to="/shop">Collections</NavLink>
               <NavLink className={desktopNavLink} to="/#story">Our story</NavLink>
@@ -194,20 +194,15 @@ function Header({ cartCount, wishlist }) {
 
             <button
               type="button"
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[#2c1e19] transition hover:bg-[#ece4d1] lg:hidden"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#2c1e19] transition hover:bg-[#ece4d1] lg:hidden"
               onClick={() => setMobileOpen(true)}
               aria-label="Open menu"
             >
-              <Menu size={24} strokeWidth={1.8} />
+              <Menu size={22} strokeWidth={1.8} />
             </button>
           </div>
         </div>
       </header>
-
-      {/* Mobile and tablet search row */}
-      <div className="border-b border-[#e2d9c5] bg-[#f8f5e9] px-4 py-3 sm:px-7 xl:hidden">
-        <div className="mx-auto max-w-2xl">{searchForm}</div>
-      </div>
 
       {/* Drawer: always opens from the right edge */}
       <AnimatePresence>

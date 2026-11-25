@@ -49,20 +49,20 @@ function CategorySection({ categories }) {
   return (
     <section className="py-9 sm:py-16" id="collections">
       <div className="mx-auto max-w-7xl px-4 sm:px-7">
-        <div className="mb-6 flex flex-col items-center gap-4 text-center sm:mb-8 sm:flex-row sm:items-end sm:justify-between sm:text-left">
-          <div className="min-w-0">
-            <span className="mb-2 inline-flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[#81622f] sm:justify-start">
+        <div className="mb-6 flex items-end justify-between gap-3 sm:mb-8 sm:gap-4">
+          <div className="min-w-0 text-left">
+            <span className="mb-2 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[#81622f]">
               <span className="h-2.5 w-2.5 rotate-45 bg-[#b88a3e]" />
               Browse
             </span>
-            <h2 className="text-[34px] font-semibold leading-tight tracking-[-0.04em] text-[#2c1e19] sm:text-5xl">
+            <h2 className="text-[28px] font-semibold leading-tight tracking-[-0.04em] text-[#2c1e19] sm:text-5xl">
               Shop by category
             </h2>
           </div>
 
           <Link
             to="/shop"
-            className="group inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#ded5c3] bg-[#fffdf7] px-3.5 py-2 text-xs font-semibold tracking-wide text-[#2c1e19] shadow-sm transition duration-300 hover:border-[#b88a3e] hover:text-[#85642e] hover:shadow-md sm:px-4 sm:text-sm"
+            className="group inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#d6cbb5] bg-[#fffdf7] px-3.5 py-2 text-xs font-semibold tracking-wide text-[#2c1e19] shadow-sm transition duration-300 hover:border-[#b88a3e] hover:bg-[#2c1e19] hover:text-white hover:shadow-md sm:px-5 sm:py-2.5 sm:text-sm"
           >
             View all
             <ArrowRight size={15} className="transition-transform duration-300 group-hover:translate-x-0.5" />
