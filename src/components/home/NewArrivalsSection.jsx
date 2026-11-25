@@ -6,7 +6,7 @@ function NewArrivalsSection({ featuredProducts, addToCart, toggleWishlist, wishl
   return (
     <section className="py-10 sm:py-16" id="new-arrivals">
       <div className="mx-auto max-w-7xl px-4 sm:px-7">
-        <div className="mb-6 flex items-end justify-between gap-3 sm:mb-8">
+        <div className="mb-6 flex flex-col items-center gap-3 text-center sm:mb-8 sm:flex-row sm:items-end sm:justify-between sm:text-left">
           <div>
             <h2 className="text-[34px] font-semibold leading-tight tracking-[-0.04em] text-[#2c1e19] sm:text-5xl">New arrivals</h2>
             <p className="mt-2 text-sm text-[#71645b] sm:text-lg">Just in from the looms</p>

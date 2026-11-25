@@ -1,14 +1,57 @@
+import { useEffect, useRef, useState } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import ImageWithFallback from '../ImageWithFallback'
 
 function CategorySection({ categories }) {
+  const scrollRef = useRef(null)
+  const scrollPosRef = useRef(0)
+  const [isPaused, setIsPaused] = useState(false)
+
+  const visibleCategories = categories.slice(0, 10)
+  const shouldLoop = visibleCategories.length > 1
+  const displayCategories = shouldLoop ? [...visibleCategories, ...visibleCategories] : visibleCategories
+
+  useEffect(() => {
+    const container = scrollRef.current
+    if (!container || !shouldLoop) return undefined
+
+    let frameId
+    let lastTime = performance.now()
+    const pixelsPerSecond = 42
+
+    const step = (now) => {
+      const delta = Math.min(now - lastTime, 50)
+      lastTime = now
+
+      if (!isPaused) {
+        const halfWidth = container.scrollWidth / 2
+        scrollPosRef.current += (pixelsPerSecond * delta) / 1000
+        if (halfWidth > 0 && scrollPosRef.current >= halfWidth) {
+          scrollPosRef.current -= halfWidth
+        }
+        container.scrollLeft = scrollPosRef.current
+      }
+
+      frameId = window.requestAnimationFrame(step)
+    }
+
+    frameId = window.requestAnimationFrame(step)
+    return () => window.cancelAnimationFrame(frameId)
+  }, [isPaused, shouldLoop, visibleCategories.length])
+
+  const handleManualScroll = () => {
+    if (isPaused && scrollRef.current) {
+      scrollPosRef.current = scrollRef.current.scrollLeft
+    }
+  }
+
   return (
     <section className="py-9 sm:py-16" id="collections">
       <div className="mx-auto max-w-7xl px-4 sm:px-7">
-        <div className="mb-6 flex items-end justify-between gap-4 sm:mb-8">
+        <div className="mb-6 flex flex-col items-center gap-4 text-center sm:mb-8 sm:flex-row sm:items-end sm:justify-between sm:text-left">
           <div className="min-w-0">
-            <span className="mb-2 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[#81622f]">
+            <span className="mb-2 inline-flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[#81622f] sm:justify-start">
               <span className="h-2.5 w-2.5 rotate-45 bg-[#b88a3e]" />
               Browse
             </span>
@@ -26,12 +69,20 @@ function CategorySection({ categories }) {
           </Link>
         </div>
 
-        <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-3 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-2 sm:px-0 lg:grid-cols-3">
-          {categories.map((category) => (
+        <div
+          ref={scrollRef}
+          onMouseEnter={() => setIsPaused(true)}
+          onMouseLeave={() => setIsPaused(false)}
+          onTouchStart={() => setIsPaused(true)}
+          onTouchEnd={() => setIsPaused(false)}
+          onScroll={handleManualScroll}
+          className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:gap-5 sm:px-0"
+        >
+          {displayCategories.map((category, index) => (
             <Link
-              key={category.name}
+              key={`${category.id || category.name}-${index}`}
               to={`/shop?category=${encodeURIComponent(category.name)}`}
-              className="group relative h-[300px] w-[82vw] max-w-[370px] shrink-0 snap-start overflow-hidden rounded-[28px] border border-[#e2d9c5] bg-[#513c34] sm:h-[340px] sm:w-auto sm:max-w-none"
+              className="group relative h-[300px] w-[76vw] max-w-[320px] shrink-0 overflow-hidden rounded-[28px] border border-[#e2d9c5] bg-[#513c34] sm:h-[340px] sm:w-[320px] lg:w-[380px]"
             >
               <ImageWithFallback
                 src={category.image}
