@@ -331,6 +331,8 @@ function AdminPage({
   const [showDetails, setShowDetails] = useState(true)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
 
@@ -349,7 +351,7 @@ function AdminPage({
   const lowStock = products.filter((product) => Number(product.stock) < 5).length
   const visibleProducts = products.filter((product) => product.showOnStorefront).length
 
-  const anyModalOpen = isFormOpen || isCategoryFormOpen
+  const anyModalOpen = isFormOpen || isCategoryFormOpen || Boolean(deleteTarget)
 
   useEffect(() => {
     if (!anyModalOpen) return
@@ -358,6 +360,7 @@ function AdminPage({
       if (event.key === 'Escape') {
         setIsFormOpen(false)
         setIsCategoryFormOpen(false)
+        if (!isDeleting) setDeleteTarget(null)
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -365,7 +368,7 @@ function AdminPage({
       document.body.style.overflow = ''
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [anyModalOpen])
+  }, [anyModalOpen, isDeleting])
 
   if (!user || adminRole === 'signed-out' || adminRole === 'denied' || adminRoleError) {
     return (
@@ -439,14 +442,18 @@ function AdminPage({
     const urls = imageUrlInput.split(/\r?\n/).map((url) => url.trim()).filter(Boolean)
 
     if (!urls.length) {
-      setError('Paste at least one image URL.')
+      const msg = 'Paste at least one image URL.'
+      setError(msg)
+      toast.error(msg)
       return
     }
 
     const invalidUrl = urls.find((url) => !isAllowedImageUrl(url))
 
     if (invalidUrl) {
-      setError('Each image URL must be a valid public HTTPS URL.')
+      const msg = 'Each image URL must be a valid public HTTPS URL.'
+      setError(msg)
+      toast.error(msg)
       return
     }
 
@@ -455,7 +462,9 @@ function AdminPage({
       images: [...new Set([...current.images, ...urls])],
     }))
     setImageUrlInput('')
-    setNotice(`${urls.length} image ${urls.length === 1 ? 'URL added' : 'URLs added'}.`)
+    const msg = `${urls.length} image ${urls.length === 1 ? 'URL added' : 'URLs added'}.`
+    setNotice(msg)
+    toast.success(msg)
   }
 
   const handleProductSubmit = async (event) => {
@@ -463,7 +472,9 @@ function AdminPage({
     setError('')
     setNotice('')
     if (!form.images.length) {
-      setError('Add at least one HTTPS image URL before saving.')
+      const msg = 'Add at least one HTTPS image URL before saving.'
+      setError(msg)
+      toast.error(msg)
       return
     }
 
@@ -620,20 +631,8 @@ function AdminPage({
     setNotice('')
   }
 
-  const handleDeleteProduct = async (product) => {
-    if (!window.confirm(`Delete "${product.name}" from the catalog?`)) return
-    setError('')
-    setNotice('')
-    try {
-      await onDeleteProduct(product.id)
-      if (editingId === product.id) handleCloseForm()
-      setNotice('Product deleted.')
-      toast.success('Product deleted.')
-    } catch (deleteError) {
-      const msg = messageForError(deleteError)
-      setError(msg)
-      toast.error(msg)
-    }
+  const handleDeleteProduct = (product) => {
+    setDeleteTarget({ type: 'product', item: product })
   }
 
   const handleCategorySubmit = async (event) => {
@@ -681,19 +680,34 @@ function AdminPage({
     setNotice('')
   }
 
-  const handleDeleteCategory = async (category) => {
-    if (!window.confirm(`Delete the "${category.name}" category? Products in it will not be deleted.`)) return
+  const handleDeleteCategory = (category) => {
+    setDeleteTarget({ type: 'category', item: category })
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return
     setError('')
     setNotice('')
+    setIsDeleting(true)
     try {
-      await onDeleteCategory(category.id)
-      if (editingCategoryId === category.id) handleCloseCategoryForm()
-      setNotice('Category deleted.')
-      toast.success('Category deleted.')
+      if (deleteTarget.type === 'product') {
+        await onDeleteProduct(deleteTarget.item.id)
+        if (editingId === deleteTarget.item.id) handleCloseForm()
+        setNotice('Product deleted.')
+        toast.success('Product deleted.')
+      } else {
+        await onDeleteCategory(deleteTarget.item.id)
+        if (editingCategoryId === deleteTarget.item.id) handleCloseCategoryForm()
+        setNotice('Category deleted.')
+        toast.success('Category deleted.')
+      }
+      setDeleteTarget(null)
     } catch (deleteError) {
       const msg = messageForError(deleteError)
       setError(msg)
       toast.error(msg)
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -814,11 +828,6 @@ function AdminPage({
                   <X size={16} />
                 </button>
               )}
-            </div>
-          )}
-          {notice && (
-            <div role="status" className="mb-6 flex items-center gap-2.5 rounded-2xl border border-emerald-100 bg-emerald-50/80 px-4 py-3.5 text-sm text-emerald-800">
-              <CircleCheck size={17} /> {notice}
             </div>
           )}
 
@@ -1353,6 +1362,52 @@ function AdminPage({
           )}
         </main>
       </div>
+      <Modal
+        open={Boolean(deleteTarget)}
+        onClose={() => {
+          if (!isDeleting) setDeleteTarget(null)
+        }}
+        label={deleteTarget?.type === 'product' ? 'Delete product' : 'Delete category'}
+      >
+        <div className="flex flex-col items-center text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-rose-50 text-rose-600 ring-1 ring-rose-100">
+            <Trash2 size={24} />
+          </span>
+          <h3 className="mt-4 font-serif text-2xl tracking-tight text-[#241f18]">
+            {deleteTarget?.type === 'product' ? 'Delete product?' : 'Delete category?'}
+          </h3>
+          <p className="mt-2 max-w-sm text-sm leading-relaxed text-[#766c5d]">
+            {deleteTarget?.type === 'product' ? (
+              <>
+                Are you sure you want to delete <strong className="font-semibold text-[#241f18]">"{deleteTarget?.item?.name}"</strong> from your catalog? This action cannot be undone.
+              </>
+            ) : (
+              <>
+                Are you sure you want to delete the <strong className="font-semibold text-[#241f18]">"{deleteTarget?.item?.name}"</strong> category? Products in it will not be deleted.
+              </>
+            )}
+          </p>
+          <div className="mt-7 flex w-full gap-3">
+            <button
+              type="button"
+              disabled={isDeleting}
+              onClick={() => setDeleteTarget(null)}
+              className={`${ghostBtn} min-h-12 flex-1`}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={isDeleting}
+              onClick={handleConfirmDelete}
+              className="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-rose-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-60"
+            >
+              {isDeleting ? <LoaderCircle size={16} className="animate-spin" /> : <Trash2 size={16} />}
+              {isDeleting ? 'Deleting…' : 'Delete'}
+            </button>
+          </div>
+        </div>
+      </Modal>
       <ToastContainer
         position="top-right"
         autoClose={3000}
