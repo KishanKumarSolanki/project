@@ -789,7 +789,11 @@ function AdminPage({
         </div>
       </aside>
 
-      <div className="flex min-h-screen flex-col lg:pl-[264px]">
+      <div
+        className={`flex flex-col lg:pl-[264px] ${
+          activeSection === 'whatsapp' ? 'h-[100dvh] overflow-hidden' : 'min-h-screen'
+        }`}
+      >
         <header className="sticky top-0 z-10 flex min-h-[76px] items-center justify-between border-b border-[#e8e0cf] bg-[#fffdf9]/85 px-4 backdrop-blur-xl sm:px-8">
           <div>
             <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a87d3d]">
@@ -826,7 +830,7 @@ function AdminPage({
         <main
           className={
             activeSection === 'whatsapp'
-              ? 'flex flex-1 flex-col'
+              ? 'flex min-h-0 flex-1 flex-col overflow-hidden'
               : 'mx-auto w-full max-w-[1500px] px-4 py-7 sm:px-8 sm:py-10'
           }
         >

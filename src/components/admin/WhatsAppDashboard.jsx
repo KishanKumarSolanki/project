@@ -81,7 +81,7 @@ function WhatsAppDashboard({ user }) {
   }, [user, mountKey])
 
   return (
-    <section className="relative flex flex-1 w-full flex-col bg-[#111315]">
+    <section className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
       {status === 'loading' && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#fffdf7]/90 p-6 text-center">
           <LoaderCircle size={28} className="animate-spin text-[#b88a3e]" />
@@ -108,7 +108,11 @@ function WhatsAppDashboard({ user }) {
         </div>
       )}
 
-      <div id="chatverse-whatsapp" ref={containerRef} className="h-[calc(100vh-76px)] w-full flex-1" />
+      <div
+        id="chatverse-whatsapp"
+        ref={containerRef}
+        className="min-h-0 h-full w-full flex-1 [&>iframe]:!block [&>iframe]:!h-full [&>iframe]:!min-h-full [&>iframe]:!w-full [&>iframe]:!border-0"
+      />
     </section>
   )
 }
