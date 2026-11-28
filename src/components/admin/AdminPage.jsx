@@ -195,10 +195,8 @@ function SignInScreen({ authReady, adminRole, adminRoleError, user, onSignOut })
           <div className="pointer-events-none absolute -right-28 -top-24 h-96 w-96 rounded-full border border-white/10" />
           <div className="pointer-events-none absolute -right-12 -top-8 h-56 w-56 rounded-full border border-white/10" />
 
-          <div className="relative flex items-center gap-3">
-            <span className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-lg shadow-black/30">
-              <img src={logo} alt="Doritaaga logo" className="h-full w-full object-contain p-1" />
-            </span>
+          <div className="relative flex items-center gap-3.5">
+            <img src={logo} alt="Doritaaga logo" className="h-16 w-16 shrink-0 object-contain" />
             <div>
               <p className="font-serif text-lg tracking-wide">Doritaaga</p>
               <p className="text-[11px] uppercase tracking-[0.18em] text-white/50">Atelier administration</p>
@@ -756,10 +754,8 @@ function AdminPage({
   return (
     <div className="min-h-screen bg-[#f5f1e8] text-[#241f18]">
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-[264px] flex-col border-r border-[#e8e0cf] bg-[#fffdf9] px-5 py-7 lg:flex">
-        <div className="flex items-center gap-3 px-2">
-          <span className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-[#e8e0cf]">
-            <img src={logo} alt="Doritaaga logo" className="h-full w-full object-contain p-1" />
-          </span>
+        <div className="flex items-center gap-3 px-1">
+          <img src={logo} alt="Doritaaga logo" className="h-16 w-16 shrink-0 object-contain" />
           <div>
             <p className="font-serif text-lg tracking-wide">Doritaaga</p>
             <p className="text-[10px] uppercase tracking-[0.16em] text-[#a39a8a]">Atelier admin</p>
