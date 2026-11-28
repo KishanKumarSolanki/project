@@ -19,6 +19,7 @@ import {
   LayoutDashboard,
   LoaderCircle,
   LogOut,
+  MessageCircle,
   Package,
   PackagePlus,
   Pencil,
@@ -41,6 +42,7 @@ import {
 import { signInWithEmailAndPassword } from 'firebase/auth'
 import { Link } from 'react-router-dom'
 import ImageWithFallback from '../ImageWithFallback'
+import WhatsAppDashboard from './WhatsAppDashboard'
 import { auth } from '../../firebase'
 import { formatPrice } from '../../utils/formatPrice'
 import { isAllowedImageUrl } from '../../utils/imageUrl'
@@ -742,6 +744,7 @@ function AdminPage({
   const navItems = [
     { id: 'products', label: 'Products', Icon: Package },
     { id: 'categories', label: 'Categories', Icon: Layers },
+    { id: 'whatsapp', label: 'WhatsApp', Icon: MessageCircle },
   ]
 
   const navButtonClass = (active) =>
@@ -786,13 +789,19 @@ function AdminPage({
         </div>
       </aside>
 
-      <div className="lg:pl-[264px]">
+      <div className="flex min-h-screen flex-col lg:pl-[264px]">
         <header className="sticky top-0 z-10 flex min-h-[76px] items-center justify-between border-b border-[#e8e0cf] bg-[#fffdf9]/85 px-4 backdrop-blur-xl sm:px-8">
           <div>
             <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a87d3d]">
               <Sparkles size={11} /> Store management
             </p>
-            <h1 className="mt-0.5 font-serif text-xl tracking-tight">{activeSection === 'categories' ? 'Categories' : 'Products'}</h1>
+            <h1 className="mt-0.5 font-serif text-xl tracking-tight">
+              {activeSection === 'categories'
+                ? 'Categories'
+                : activeSection === 'whatsapp'
+                  ? 'WhatsApp'
+                  : 'Products'}
+            </h1>
           </div>
           <div className="flex items-center gap-2.5">
             <Link to="/" className={`${ghostBtn} h-10`}>
@@ -814,8 +823,20 @@ function AdminPage({
           </div>
         </header>
 
-        <main className="mx-auto max-w-[1500px] px-4 py-7 sm:px-8 sm:py-10">
-          <div className="mb-7 flex gap-2 overflow-x-auto lg:hidden">
+        <main
+          className={
+            activeSection === 'whatsapp'
+              ? 'flex flex-1 flex-col'
+              : 'mx-auto w-full max-w-[1500px] px-4 py-7 sm:px-8 sm:py-10'
+          }
+        >
+          <div
+            className={`flex gap-2 overflow-x-auto lg:hidden ${
+              activeSection === 'whatsapp'
+                ? 'border-b border-[#e8e0cf] bg-[#fffdf9] px-4 py-3'
+                : 'mb-7'
+            }`}
+          >
             {navItems.map(({ id, label, Icon }) => (
               <button
                 key={id}
@@ -842,7 +863,9 @@ function AdminPage({
             </div>
           )}
 
-          {activeSection === 'products' ? (
+          {activeSection === 'whatsapp' ? (
+            <WhatsAppDashboard user={user} />
+          ) : activeSection === 'products' ? (
             <>
               <section className="mb-8 flex items-end justify-between gap-4">
                 <div className="min-w-0">
