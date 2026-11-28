@@ -32,71 +32,43 @@ const REVIEWS = [
     quote:
       '“The attention to detail in the zari work is breathtaking. True luxury experience from order to delivery. Will definitely order again!”',
   },
-  {
-    id: 'meera-iyer',
-    initials: 'MI',
-    name: 'Meera Iyer',
-    city: 'Chennai',
-    badgeBg: 'bg-[#f6efe2]',
-    badgeText: 'text-[#9a7432]',
-    quote:
-      '“I gifted a Kanjivaram to my mother and she was in tears. The drape, the lustre, the craftsmanship — every bit worth it.”',
-  },
-  {
-    id: 'kavitha-nair',
-    initials: 'KN',
-    name: 'Kavitha Nair',
-    city: 'Kochi',
-    badgeBg: 'bg-[#f5e8ea]',
-    badgeText: 'text-[#b98791]',
-    quote:
-      '“My go-to for handloom sarees. The Chanderi I ordered arrived beautifully packed with a handwritten note. Such a personal touch.”',
-  },
 ]
 
-const AUTO_SCROLL_INTERVAL = 4500
+const MOBILE_AUTO_SCROLL_MS = 3500
 
 function TestimonialsSection() {
-  const [activeIndex, setActiveIndex] = useState(0)
+  const scrollRef = useRef(null)
+  const indexRef = useRef(0)
   const [isPaused, setIsPaused] = useState(false)
-  const touchStartX = useRef(null)
-
-  const totalReviews = REVIEWS.length
 
   useEffect(() => {
     if (isPaused) return undefined
+
     const timer = window.setInterval(() => {
-      setActiveIndex((current) => (current + 1) % totalReviews)
-    }, AUTO_SCROLL_INTERVAL)
+      const container = scrollRef.current
+      if (!container || window.innerWidth >= 768) return
+
+      const cards = container.children
+      if (!cards.length) return
+
+      indexRef.current = (indexRef.current + 1) % cards.length
+      const firstCard = cards[0]
+      const targetCard = cards[indexRef.current]
+      const targetLeft = targetCard.offsetLeft - firstCard.offsetLeft
+
+      container.scrollTo({ left: targetLeft, behavior: 'smooth' })
+    }, MOBILE_AUTO_SCROLL_MS)
+
     return () => window.clearInterval(timer)
-  }, [isPaused, totalReviews])
-
-  const handleTouchStart = (event) => {
-    touchStartX.current = event.touches[0]?.clientX ?? null
-    setIsPaused(true)
-  }
-
-  const handleTouchEnd = (event) => {
-    if (touchStartX.current !== null) {
-      const endX = event.changedTouches[0]?.clientX ?? touchStartX.current
-      const diff = touchStartX.current - endX
-      if (diff > 40) {
-        setActiveIndex((current) => (current + 1) % totalReviews)
-      } else if (diff < -40) {
-        setActiveIndex((current) => (current - 1 + totalReviews) % totalReviews)
-      }
-    }
-    touchStartX.current = null
-    setIsPaused(false)
-  }
+  }, [isPaused])
 
   return (
     <section
       className="bg-[#fffdf7] px-4 py-14 sm:px-7 sm:py-20"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
+      onTouchStart={() => setIsPaused(true)}
+      onTouchEnd={() => setIsPaused(false)}
     >
       <div className="mx-auto max-w-7xl">
         <div className="text-center sm:text-left">
@@ -112,68 +84,44 @@ function TestimonialsSection() {
           </p>
         </div>
 
-        {/* Carousel viewport */}
-        <div className="mt-10 overflow-hidden sm:mt-14">
-          <div
-            className="flex transition-transform duration-700 ease-out"
-            style={{ transform: `translateX(-${activeIndex * 100}%)` }}
-          >
-            {REVIEWS.map((review) => (
-              <div key={review.id} className="w-full shrink-0 px-0.5">
-                <article className="rounded-[28px] border border-[#ddd4bf] bg-[#faf7ed] p-6 shadow-[0_10px_30px_rgba(44,30,25,0.06)] sm:p-10">
-                  <span className="block h-8 text-5xl leading-none text-[#eee5d7]">“</span>
-                  <div
-                    className="mt-2 flex gap-1 text-[#b88a3e]"
-                    aria-label="5 out of 5 stars"
-                  >
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <Star key={star} size={21} fill="currentColor" />
-                    ))}
-                  </div>
-                  <blockquote className="mt-5 text-lg italic leading-8 text-[#71645b] sm:text-2xl sm:leading-10">
-                    {review.quote}
-                  </blockquote>
-                  <div className="mt-6 flex items-center gap-3 border-t border-[#e2d9c5] pt-5">
-                    <span
-                      className={`flex h-12 w-12 items-center justify-center rounded-xl text-sm font-semibold ${review.badgeBg} ${review.badgeText}`}
-                    >
-                      {review.initials}
-                    </span>
-                    <span>
-                      <strong className="block text-base font-semibold text-[#2c1e19]">
-                        {review.name}
-                      </strong>
-                      <small className="text-sm text-[#71645b]">{review.city}</small>
-                    </span>
-                  </div>
-                </article>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Interactive pagination dots */}
         <div
-          className="mt-7 flex items-center justify-center gap-2"
-          role="tablist"
-          aria-label="Customer reviews"
+          ref={scrollRef}
+          className="-mx-4 mt-10 flex snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto px-4 pb-3 [scrollbar-width:none] sm:mt-14 md:mx-0 md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:px-0 md:pb-0"
         >
-          {REVIEWS.map((review, index) => {
-            const isActive = index === activeIndex
-            return (
-              <button
-                key={review.id}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                aria-label={`Show review by ${review.name}`}
-                onClick={() => setActiveIndex(index)}
-                className={`h-2.5 rounded-full transition-all duration-300 ${
-                  isActive ? 'w-7 bg-[#b98791]' : 'w-2.5 bg-[#dfd5c0] hover:bg-[#cbbd9f]'
-                }`}
-              />
-            )
-          })}
+          {REVIEWS.map((review) => (
+            <article
+              key={review.id}
+              className="flex w-[84vw] max-w-[340px] shrink-0 snap-start flex-col justify-between rounded-[26px] border border-[#ddd4bf] bg-[#faf7ed] p-6 shadow-[0_10px_30px_rgba(44,30,25,0.06)] sm:p-7 md:w-auto md:max-w-none"
+            >
+              <div>
+                <span className="block h-7 text-4xl leading-none text-[#e5dcc9]">“</span>
+                <div
+                  className="mt-2 flex gap-1 text-[#b88a3e]"
+                  aria-label="5 out of 5 stars"
+                >
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Star key={star} size={18} fill="currentColor" />
+                  ))}
+                </div>
+                <blockquote className="mt-4 text-base italic leading-7 text-[#71645b] sm:text-[17px] sm:leading-8">
+                  {review.quote}
+                </blockquote>
+              </div>
+              <div className="mt-6 flex items-center gap-3 border-t border-[#e2d9c5] pt-5">
+                <span
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-semibold ${review.badgeBg} ${review.badgeText}`}
+                >
+                  {review.initials}
+                </span>
+                <span>
+                  <strong className="block text-sm font-semibold text-[#2c1e19] sm:text-base">
+                    {review.name}
+                  </strong>
+                  <small className="text-xs text-[#71645b] sm:text-sm">{review.city}</small>
+                </span>
+              </div>
+            </article>
+          ))}
         </div>
       </div>
     </section>

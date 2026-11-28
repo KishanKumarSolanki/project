@@ -90,6 +90,7 @@ function IconButton({ to, label, count, children }) {
 
 function Header({ cartCount, wishlist }) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [isSearchFocused, setIsSearchFocused] = useState(false)
   const navigate = useNavigate()
@@ -97,6 +98,7 @@ function Header({ cartCount, wishlist }) {
 
   const submitSearch = (event) => {
     event.preventDefault()
+    setMobileSearchOpen(false)
     navigate(`/shop?search=${encodeURIComponent(search)}`)
   }
 
@@ -134,22 +136,17 @@ function Header({ cartCount, wishlist }) {
     <>
       <div className="relative overflow-hidden bg-[#2c1e19] px-3 py-2 text-center text-[11px] font-medium uppercase tracking-[0.18em] text-[#f1ead8] sm:text-xs">
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,transparent,rgba(212,169,90,0.12),transparent)]" />
-        <span className="relative">
-          {pathname === '/shop' ? (
-            'Free delivery on orders ₹1,999+'
-          ) : (
-            <>
-              7-day easy returns <span className="px-2 text-[#d4a95a]">◆</span> Secure online payment
-            </>
-          )}
-        </span>
+        <div className="relative flex flex-col items-center gap-0.5 leading-snug">
+          <span>Free Pan India Shipping</span>
+          <span className="text-[#d4a95a]">International Shipping is Available</span>
+        </div>
       </div>
 
       <header className="sticky top-0 z-40 border-b border-[#e2d9c5]/80 bg-[#f8f5e9]/90 shadow-[0_8px_30px_-18px_rgba(44,30,25,0.25)] backdrop-blur-xl">
-        <div className="mx-auto flex h-[68px] max-w-7xl items-center justify-between gap-2.5 px-3 sm:h-[76px] sm:gap-5 sm:px-7">
+        <div className="mx-auto flex h-[78px] max-w-7xl items-center justify-between gap-2.5 px-3 sm:h-[94px] sm:gap-5 sm:px-7">
           {/* Left: logo and desktop main nav */}
           <div className="flex shrink-0 items-center gap-3 lg:gap-7">
-            <BrandMark />
+            <BrandMark hideTextOnMobile />
 
             <nav className="hidden items-center gap-7 lg:flex" aria-label="Main navigation">
               <NavLink className={desktopNavLink} to="/">Home</NavLink>
@@ -158,12 +155,22 @@ function Header({ cartCount, wishlist }) {
             </nav>
           </div>
 
-          {/* Center: search bar (mobile + tablet + desktop) */}
-          <div className="flex min-w-0 flex-1 justify-center">
+          {/* Center: brand name on mobile, search bar on tablet + desktop */}
+          <Link
+            to="/"
+            className="flex min-w-0 flex-1 items-center justify-center md:hidden"
+            aria-label="Dori Taaga home"
+          >
+            <span className="whitespace-nowrap font-serif text-[23px] font-semibold tracking-[0.04em] text-[#2c1e19]">
+              Dori Taaga
+            </span>
+          </Link>
+
+          <div className="hidden min-w-0 flex-1 justify-center md:flex">
             <div className="w-full max-w-md">{searchForm}</div>
           </div>
 
-          {/* Right: desktop links, login, icons, and mobile menu button at the end */}
+          {/* Right: desktop links, login, icons, mobile search icon, and mobile menu button */}
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             <nav className="mr-3 hidden items-center gap-6 2xl:flex" aria-label="More links">
               <NavLink className={desktopNavLink} to="/shop">Collections</NavLink>
@@ -194,6 +201,16 @@ function Header({ cartCount, wishlist }) {
 
             <button
               type="button"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#2c1e19] transition hover:bg-[#ece4d1] md:hidden"
+              onClick={() => setMobileSearchOpen((prev) => !prev)}
+              aria-label={mobileSearchOpen ? 'Close search' : 'Open search'}
+              aria-expanded={mobileSearchOpen}
+            >
+              {mobileSearchOpen ? <X size={21} strokeWidth={1.8} /> : <Search size={21} strokeWidth={1.8} />}
+            </button>
+
+            <button
+              type="button"
               className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#2c1e19] transition hover:bg-[#ece4d1] lg:hidden"
               onClick={() => setMobileOpen(true)}
               aria-label="Open menu"
@@ -202,6 +219,23 @@ function Header({ cartCount, wishlist }) {
             </button>
           </div>
         </div>
+
+        {/* Expandable mobile search bar */}
+        <AnimatePresence>
+          {mobileSearchOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="overflow-hidden border-t border-[#e2d9c5]/70 bg-[#f8f5e9] md:hidden"
+            >
+              <div className="mx-auto max-w-7xl px-3 py-2.5">
+                {searchForm}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </header>
 
       {/* Drawer: always opens from the right edge */}

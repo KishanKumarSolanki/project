@@ -52,6 +52,7 @@ export const normalizeFirestoreProduct = (snapshot) => {
     stock: Number(data.stock) || 0,
     rating: Number(data.rating) || 0,
     reviews: Number(data.reviews) || 0,
+    instagramUrl: typeof data.instagramUrl === 'string' ? data.instagramUrl.trim() : '',
     colors: colors.length ? colors : [data.color || 'Classic'],
     showOnStorefront:
       typeof data.showOnStorefront === 'boolean'

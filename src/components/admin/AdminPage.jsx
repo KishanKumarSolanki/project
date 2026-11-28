@@ -31,6 +31,7 @@ import {
   Sparkles,
   Tag,
   Trash2,
+  Video,
   Wallet,
   X,
   FolderPlus,
@@ -43,6 +44,7 @@ import ImageWithFallback from '../ImageWithFallback'
 import { auth } from '../../firebase'
 import { formatPrice } from '../../utils/formatPrice'
 import { isAllowedImageUrl } from '../../utils/imageUrl'
+import { isValidInstagramUrl } from '../../utils/instagram'
 
 const EMPTY_PRODUCT = {
   name: '',
@@ -76,6 +78,7 @@ const EMPTY_PRODUCT = {
   blouseStitchingNote: 'For blouse stitching, please share your measurements and confirm your size with our team via WhatsApp.',
   care: '',
   description: '',
+  instagramUrl: '',
   images: [],
 }
 
@@ -477,6 +480,12 @@ function AdminPage({
       toast.error(msg)
       return
     }
+    if (!isValidInstagramUrl(form.instagramUrl)) {
+      const msg = 'Enter a valid Instagram Reel or Post URL (e.g. https://www.instagram.com/reel/...).'
+      setError(msg)
+      toast.error(msg)
+      return
+    }
 
     setIsSaving(true)
     const price = Number(form.price)
@@ -495,6 +504,7 @@ function AdminPage({
       fallPicoPrice: form.fallPicoPrice === '' ? null : Number(form.fallPicoPrice),
       fallPico: form.fallPico?.trim() || '',
       fallPicoAvailable: form.fallPicoAvailable === true,
+      instagramUrl: form.instagramUrl?.trim() || '',
       colors: colors.length ? colors : [form.color || 'Classic'],
       color: form.color || colors[0] || 'Classic',
       images: form.images,
@@ -616,6 +626,7 @@ function AdminPage({
       fallPicoPrice: product.fallPicoPrice == null ? '' : String(product.fallPicoPrice),
       fallPico: product.fallPico ?? '',
       fallPicoAvailable: Boolean(product.fallPicoAvailable),
+      instagramUrl: product.instagramUrl ?? '',
       showOnStorefront: product.showOnStorefront === true,
       colors: Array.isArray(product.colors) ? product.colors.join(', ') : product.color || '',
       images: Array.isArray(product.images) ? product.images : [],
@@ -1219,6 +1230,19 @@ function AdminPage({
                       </div>
                     )}
                   </div>
+
+                  <Field label="Instagram video / reel URL (optional)" icon={Video} className="sm:col-span-2">
+                    <input
+                      className={inputClass}
+                      type="url"
+                      value={form.instagramUrl}
+                      onChange={(event) => setForm({ ...form, instagramUrl: event.target.value })}
+                      placeholder="https://www.instagram.com/reel/..."
+                    />
+                    <span className="mt-2 block text-xs text-[#a39a8a]">
+                      Optional. Paste an Instagram Reel or Post URL — customers can click to play this video on the product page.
+                    </span>
+                  </Field>
 
                   <div className="flex flex-wrap gap-3 pt-2 sm:col-span-2">
                     <button type="submit" disabled={isSaving} className={primaryBtn}>

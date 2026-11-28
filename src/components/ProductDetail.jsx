@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   CheckCircle2,
+  ExternalLink,
   Heart,
   MapPin,
   Minus,
+  Play,
   Plus,
   RotateCcw,
   Scissors,
@@ -12,10 +14,12 @@ import {
   Sparkles,
   Star,
   Truck,
+  X,
 } from 'lucide-react'
 import ImageWithFallback from './ImageWithFallback'
 import ProductCard from './ProductCard'
 import { formatPrice } from '../utils/formatPrice'
+import { parseInstagramUrl } from '../utils/instagram'
 
 const SERVICEABLE_PINCODES = ['110001', '400001', '560001', '700001', '600001']
 
@@ -82,6 +86,83 @@ function Stars({ rating, size = 14 }) {
   )
 }
 
+/* ── Compact card for "You may also like" section ─────────────────────── */
+function RelatedProductCard({ product, toggleWishlist, isWishlisted, addToCart }) {
+  const price = Number(product.discountedPrice) || Number(product.price)
+  const original = Number(product.price)
+  const hasDiscount = original > price
+
+  return (
+    <div className="relative flex flex-col overflow-hidden rounded-2xl border border-[#ddd4bf] bg-[#fffdf7] shadow-sm transition hover:shadow-md">
+      {/* Image area */}
+      <Link to={`/product/${product.id}`} className="relative block aspect-[3/4] overflow-hidden bg-[#f5efe3]">
+        <ImageWithFallback
+          src={product.images?.[0]}
+          alt={product.name}
+          className="h-full w-full object-cover transition duration-300 hover:scale-105"
+        />
+        {/* NEW badge */}
+        {product.isNew && (
+          <span className="absolute left-2 top-2 rounded-full bg-[#2c1e19] px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-white">
+            NEW
+          </span>
+        )}
+        {/* Stock badge */}
+        {product.stock <= 3 && product.stock > 0 && (
+          <span className="absolute left-2 top-2 rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-white">
+            Only {product.stock} left!
+          </span>
+        )}
+        {/* Wishlist button */}
+        <button
+          onClick={(e) => { e.preventDefault(); toggleWishlist(product.id) }}
+          aria-label={isWishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
+          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/80 shadow backdrop-blur-sm transition hover:bg-white"
+        >
+          <Heart
+            size={13}
+            strokeWidth={1.8}
+            fill={isWishlisted ? '#e53e3e' : 'none'}
+            className={isWishlisted ? 'text-red-500' : 'text-[#71645b]'}
+          />
+        </button>
+      </Link>
+
+      {/* Info area */}
+      <div className="flex flex-col gap-1 p-2.5">
+        {/* Fabric + category row */}
+        <div className="flex items-center justify-between gap-1">
+          <span className="truncate text-[9px] font-bold uppercase tracking-[0.14em] text-[#b88a3e]">
+            {product.material || product.fabric || product.category}
+          </span>
+          <span className="shrink-0 text-[9px] text-[#a09080]">
+            {product.category}
+          </span>
+        </div>
+
+        {/* Product name */}
+        <p className="line-clamp-1 text-[12px] font-semibold leading-snug text-[#2c1e19]">
+          {product.name}
+        </p>
+
+        {/* Stars */}
+        <div className="flex items-center gap-1">
+          <Stars rating={product.rating || 0} size={10} />
+          <span className="text-[9px] text-[#8a7f73]">({product.reviews || 0})</span>
+        </div>
+
+        {/* Price row */}
+        <div className="mt-0.5 flex items-baseline gap-1.5">
+          <span className="text-[13px] font-bold text-[#2c1e19]">{formatPrice(price)}</span>
+          {hasDiscount && (
+            <span className="text-[10px] text-[#a09080] line-through">{formatPrice(original)}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Spec({ label, value, className = '' }) {
   return (
     <div className={className}>
@@ -96,11 +177,14 @@ function Spec({ label, value, className = '' }) {
 function ProductDetail({ addToCart, toggleWishlist, wishlist, products, product }) {
   const navigate = useNavigate()
   const [selectedImage, setSelectedImage] = useState(product.images[0])
+  const [showReelPlayer, setShowReelPlayer] = useState(false)
   const [selectedVariant, setSelectedVariant] = useState(product.colors[0] || 'Classic')
   const [quantity, setQuantity] = useState(1)
   const [pincode, setPincode] = useState('')
   const [deliveryStatus, setDeliveryStatus] = useState(null)
   const [activeTab, setActiveTab] = useState('description')
+
+  const instagramVideo = parseInstagramUrl(product.instagramUrl)
 
   const isWishlisted = wishlist.includes(product.id)
   const inStock = product.stock > 0
@@ -525,6 +609,86 @@ function ProductDetail({ addToCart, toggleWishlist, wishlist, products, product 
           </div>
         </div>
 
+        {/* Instagram Video Section (above Description / Tabs) */}
+        {instagramVideo && (
+          <section
+            className="mt-12 rounded-3xl border border-[#e6decb] bg-[#faf6ea] p-5 shadow-[0_12px_36px_rgba(44,30,25,0.04)] sm:p-8"
+            aria-labelledby="product-reel-heading"
+          >
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <div className="inline-flex items-center gap-2">
+                  <span aria-hidden="true" className="h-2 w-2 rotate-45 bg-[#b88a3e]" />
+                  <span className={ui.eyebrow}>See it in motion</span>
+                </div>
+                <h2
+                  id="product-reel-heading"
+                  className="mt-1.5 font-serif text-2xl font-semibold tracking-tight text-[#2c1e19] sm:text-3xl"
+                >
+                  Product Video
+                </h2>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                {showReelPlayer && (
+                  <button
+                    type="button"
+                    onClick={() => setShowReelPlayer(false)}
+                    className={`${ui.btnGhost} ${ui.focus}`}
+                  >
+                    <X size={15} />
+                    Close video
+                  </button>
+                )}
+                <a
+                  href={instagramVideo.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`${ui.btnGhost} ${ui.focus}`}
+                >
+                  Open on Instagram
+                  <ExternalLink size={14} />
+                </a>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-center">
+              <div className="relative aspect-[4/5] w-full max-w-[380px] overflow-hidden rounded-2xl border border-[#dfd4bc] bg-[#1a1310] shadow-lg">
+                {showReelPlayer ? (
+                  <iframe
+                    src={instagramVideo.embedUrl}
+                    title={`${product.name} Instagram reel`}
+                    className="h-full w-full border-0"
+                    allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                    allowFullScreen
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowReelPlayer(true)}
+                    aria-label="Play Instagram reel video"
+                    className={`group relative block h-full w-full overflow-hidden text-left ${ui.focus}`}
+                  >
+                    <ImageWithFallback
+                      src={product.images[0]}
+                      alt={`${product.name} video preview`}
+                      className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/25 to-black/15 transition group-hover:via-black/35" />
+
+                    {/* Centered play trigger */}
+                    <div className="relative z-10 flex h-full w-full items-center justify-center">
+                      <span className="flex h-16 w-16 items-center justify-center rounded-full border border-[#f7efe4]/40 bg-[#d9b676] text-[#1d1410] shadow-[0_12px_30px_rgba(0,0,0,0.45)] transition duration-300 group-hover:scale-110 group-hover:bg-[#e7c78a]">
+                        <Play size={26} fill="currentColor" className="ml-1" />
+                      </span>
+                    </div>
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Tabs */}
         <div className="mt-14">
           <div
@@ -617,20 +781,19 @@ function ProductDetail({ addToCart, toggleWishlist, wishlist, products, product 
 
         {/* Recommendations */}
         {recentProducts.length > 0 && (
-          <div className="mt-14 border-t border-[#e2d9c5] pt-12">
+          <div className="mt-14 border-t border-[#e2d9c5] pt-10">
             <span className={ui.eyebrow}>Curated for you</span>
-            <h2 className="mt-2 mb-8 font-serif text-2xl font-semibold tracking-tight text-[#2c1e19] sm:text-3xl">
+            <h2 className="mt-2 mb-6 font-serif text-xl font-semibold tracking-tight text-[#2c1e19] sm:text-2xl">
               You may also like
             </h2>
-            <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-3 [scrollbar-width:none] sm:mx-0 sm:gap-5 sm:px-0 lg:grid lg:grid-cols-4 lg:gap-6 lg:overflow-visible">
+            <div className="grid grid-cols-2 gap-3">
               {recentProducts.map((item) => (
-                <ProductCard
+                <RelatedProductCard
                   key={item.id}
                   product={item}
                   addToCart={addToCart}
                   toggleWishlist={toggleWishlist}
                   isWishlisted={wishlist.includes(item.id)}
-                  className="lg:w-full lg:max-w-none"
                 />
               ))}
             </div>

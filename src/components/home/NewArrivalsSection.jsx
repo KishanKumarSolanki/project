@@ -19,7 +19,7 @@ function NewArrivalsSection({ featuredProducts, addToCart, toggleWishlist, wishl
             <ArrowRight size={15} className="transition-transform duration-300 group-hover:translate-x-0.5" />
           </Link>
         </div>
-        <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-3 [scrollbar-width:none] sm:mx-0 sm:gap-5 sm:px-0">
+        <div className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto px-4 pb-3 [scrollbar-width:none] sm:mx-0 sm:scroll-px-0 sm:gap-5 sm:px-0">
           {featuredProducts.map((product) => (
             <ProductCard key={product.id} product={product} addToCart={addToCart} toggleWishlist={toggleWishlist} isWishlisted={wishlist.includes(product.id)} />
           ))}
