@@ -262,51 +262,86 @@ function ProductDetail({ addToCart, toggleWishlist, wishlist, products, product 
           {/* Left Column: Gallery */}
           <div className="min-w-0 lg:sticky lg:top-28 lg:self-start">
             <div className="relative aspect-[4/5] overflow-hidden rounded-3xl border border-[#e6decb] bg-[#f3ede0] shadow-[0_20px_50px_rgba(44,30,25,0.08)]">
-              <ImageWithFallback
-                src={selectedImage}
-                alt={product.name}
-                className="h-full w-full object-cover transition duration-500"
-              />
+              {showReelPlayer && instagramVideo ? (
+                <>
+                  <iframe
+                    src={instagramVideo.embedUrl}
+                    title={`${product.name} Instagram reel`}
+                    className="h-full w-full border-0"
+                    allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+                    allowFullScreen
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowReelPlayer(false)}
+                    aria-label="Back to photos"
+                    className={`absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full bg-[#2c1e19]/85 px-3 py-1.5 text-xs font-semibold text-[#fffdf7] shadow backdrop-blur-xs transition hover:bg-[#2c1e19] ${ui.focus}`}
+                  >
+                    <X size={14} />
+                    Photos
+                  </button>
+                  <a
+                    href={instagramVideo.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 rounded-full bg-[#2c1e19]/85 px-3 py-1.5 text-xs font-semibold text-[#fffdf7] shadow backdrop-blur-xs transition hover:bg-[#2c1e19] ${ui.focus}`}
+                  >
+                    Instagram
+                    <ExternalLink size={12} />
+                  </a>
+                </>
+              ) : (
+                <>
+                  <ImageWithFallback
+                    src={selectedImage}
+                    alt={product.name}
+                    className="h-full w-full object-cover transition duration-500"
+                  />
 
-              {/* Subtle top badges */}
-              <div className="pointer-events-none absolute left-4 top-4 flex flex-wrap gap-2">
-                {product.badge && (
-                  <span className="rounded-full bg-[#2c1e19]/85 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#f7efe4] backdrop-blur-xs">
-                    {product.badge}
-                  </span>
-                )}
-                {product.discount > 0 && (
-                  <span className="rounded-full bg-[#fffdf7]/95 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#85642e] shadow-xs">
-                    {product.discount}% OFF
-                  </span>
-                )}
-              </div>
+                  {/* Subtle top badges */}
+                  <div className="pointer-events-none absolute left-4 top-4 flex flex-wrap gap-2">
+                    {product.badge && (
+                      <span className="rounded-full bg-[#2c1e19]/85 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#f7efe4] backdrop-blur-xs">
+                        {product.badge}
+                      </span>
+                    )}
+                    {product.discount > 0 && (
+                      <span className="rounded-full bg-[#fffdf7]/95 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-[#85642e] shadow-xs">
+                        {product.discount}% OFF
+                      </span>
+                    )}
+                  </div>
 
-              {/* Quick Wishlist button on image */}
-              <button
-                type="button"
-                onClick={() => toggleWishlist(product.id)}
-                aria-label={isWishlisted ? 'Remove from wishlist' : 'Save to wishlist'}
-                aria-pressed={isWishlisted}
-                className={`absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border border-[#e6decb] bg-[#fffdf7]/90 text-[#2c1e19] shadow-sm backdrop-blur-xs transition hover:scale-105 ${ui.focus}`}
-              >
-                <Heart
-                  size={18}
-                  fill={isWishlisted ? '#b88a3e' : 'none'}
-                  className={isWishlisted ? 'text-[#b88a3e]' : ''}
-                />
-              </button>
+                  {/* Quick Wishlist button on image */}
+                  <button
+                    type="button"
+                    onClick={() => toggleWishlist(product.id)}
+                    aria-label={isWishlisted ? 'Remove from wishlist' : 'Save to wishlist'}
+                    aria-pressed={isWishlisted}
+                    className={`absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border border-[#e6decb] bg-[#fffdf7]/90 text-[#2c1e19] shadow-sm backdrop-blur-xs transition hover:scale-105 ${ui.focus}`}
+                  >
+                    <Heart
+                      size={18}
+                      fill={isWishlisted ? '#b88a3e' : 'none'}
+                      className={isWishlisted ? 'text-[#b88a3e]' : ''}
+                    />
+                  </button>
+                </>
+              )}
             </div>
 
-            {product.images.length > 1 && (
+            {(product.images.length > 1 || instagramVideo) && (
               <div className="mt-4 flex gap-3 overflow-x-auto pb-1 [scrollbar-width:none]">
                 {product.images.map((image, index) => {
-                  const isSelected = selectedImage === image
+                  const isSelected = !showReelPlayer && selectedImage === image
                   return (
                     <button
                       key={image}
                       type="button"
-                      onClick={() => setSelectedImage(image)}
+                      onClick={() => {
+                        setShowReelPlayer(false)
+                        setSelectedImage(image)
+                      }}
                       aria-label={`View image ${index + 1}`}
                       aria-pressed={isSelected}
                       className={`h-22 w-18 shrink-0 overflow-hidden rounded-xl border-2 transition sm:h-24 sm:w-20 ${ui.focus} ${
@@ -323,6 +358,31 @@ function ProductDetail({ addToCart, toggleWishlist, wishlist, products, product 
                     </button>
                   )
                 })}
+
+                {instagramVideo && (
+                  <button
+                    type="button"
+                    onClick={() => setShowReelPlayer(true)}
+                    aria-label="Play product video"
+                    aria-pressed={showReelPlayer}
+                    className={`group relative h-22 w-18 shrink-0 overflow-hidden rounded-xl border-2 bg-[#1a1310] transition sm:h-24 sm:w-20 ${ui.focus} ${
+                      showReelPlayer
+                        ? 'border-[#b88a3e] shadow-sm'
+                        : 'border-transparent opacity-85 hover:border-[#e2d9c5] hover:opacity-100'
+                    }`}
+                  >
+                    <ImageWithFallback
+                      src={product.images[0]}
+                      alt=""
+                      className="h-full w-full object-cover opacity-75 transition duration-300 group-hover:scale-105"
+                    />
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/30">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#d9b676] text-[#1d1410] shadow-md transition group-hover:scale-110">
+                        <Play size={14} fill="currentColor" className="ml-0.5" />
+                      </span>
+                    </span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -608,86 +668,6 @@ function ProductDetail({ addToCart, toggleWishlist, wishlist, products, product 
             )}
           </div>
         </div>
-
-        {/* Instagram Video Section (above Description / Tabs) */}
-        {instagramVideo && (
-          <section
-            className="mt-12 rounded-3xl border border-[#e6decb] bg-[#faf6ea] p-5 shadow-[0_12px_36px_rgba(44,30,25,0.04)] sm:p-8"
-            aria-labelledby="product-reel-heading"
-          >
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <div className="inline-flex items-center gap-2">
-                  <span aria-hidden="true" className="h-2 w-2 rotate-45 bg-[#b88a3e]" />
-                  <span className={ui.eyebrow}>See it in motion</span>
-                </div>
-                <h2
-                  id="product-reel-heading"
-                  className="mt-1.5 font-serif text-2xl font-semibold tracking-tight text-[#2c1e19] sm:text-3xl"
-                >
-                  Product Video
-                </h2>
-              </div>
-
-              <div className="flex items-center gap-2.5">
-                {showReelPlayer && (
-                  <button
-                    type="button"
-                    onClick={() => setShowReelPlayer(false)}
-                    className={`${ui.btnGhost} ${ui.focus}`}
-                  >
-                    <X size={15} />
-                    Close video
-                  </button>
-                )}
-                <a
-                  href={instagramVideo.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`${ui.btnGhost} ${ui.focus}`}
-                >
-                  Open on Instagram
-                  <ExternalLink size={14} />
-                </a>
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-center">
-              <div className="relative aspect-[4/5] w-full max-w-[380px] overflow-hidden rounded-2xl border border-[#dfd4bc] bg-[#1a1310] shadow-lg">
-                {showReelPlayer ? (
-                  <iframe
-                    src={instagramVideo.embedUrl}
-                    title={`${product.name} Instagram reel`}
-                    className="h-full w-full border-0"
-                    allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
-                    allowFullScreen
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setShowReelPlayer(true)}
-                    aria-label="Play Instagram reel video"
-                    className={`group relative block h-full w-full overflow-hidden text-left ${ui.focus}`}
-                  >
-                    <ImageWithFallback
-                      src={product.images[0]}
-                      alt={`${product.name} video preview`}
-                      className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/25 to-black/15 transition group-hover:via-black/35" />
-
-                    {/* Centered play trigger */}
-                    <div className="relative z-10 flex h-full w-full items-center justify-center">
-                      <span className="flex h-16 w-16 items-center justify-center rounded-full border border-[#f7efe4]/40 bg-[#d9b676] text-[#1d1410] shadow-[0_12px_30px_rgba(0,0,0,0.45)] transition duration-300 group-hover:scale-110 group-hover:bg-[#e7c78a]">
-                        <Play size={26} fill="currentColor" className="ml-1" />
-                      </span>
-                    </div>
-                  </button>
-                )}
-              </div>
-            </div>
-          </section>
-        )}
 
         {/* Tabs */}
         <div className="mt-14">
